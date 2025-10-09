@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WiFi 网络配网</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .title {
+            text-align: center;
+            color: #333;
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+            background-color: #fafafa;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #667eea;
+            background-color: white;
+        }
+
+        .wifi-input-container {
+            position: relative;
+        }
+
+        .wifi-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 2px solid #e1e5e9;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }
+
+        .wifi-option {
+            padding: 12px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .wifi-option:hover {
+            background-color: #f8f9fa;
+        }
+
+        .wifi-option:last-child {
+            border-bottom: none;
+        }
+
+        .wifi-signal {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .refresh-btn {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #667eea;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 5px;
+        }
+
+        .refresh-btn:hover {
+            color: #5a6fd8;
+        }
+
+        .error-message {
+            color: #e74c3c;
+            font-size: 14px;
+            margin-top: 5px;
+            display: none;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .submit-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .status-message {
+            text-align: center;
+            margin-top: 15px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .car-name-only {
+            display: none;
+        }
+
+        .car-name-only.show {
+            display: block;
+        }
+
+        .form-section.hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">WiFi 网络配网</h1>
+        
+        <form id="wifiForm">
+            <div class="form-section" id="fullForm">
+                <!-- WiFi SSID 输入框 -->
+                <div class="form-group">
+                    <label class="form-label" for="wifiSsid">WiFi SSID</label>
+                    <div class="wifi-input-container">
+                        <input type="text" id="wifiSsid" class="form-input" placeholder="请选择或输入WiFi名称" required>
+                        <button type="button" class="refresh-btn" id="refreshBtn" title="刷新WiFi列表">🔄</button>
+                        <div class="wifi-dropdown" id="wifiDropdown"></div>
+                    </div>
+                </div>
+
+                <!-- 密码输入框 -->
+                <div class="form-group">
+                    <label class="form-label" for="password">WiFi 密码</label>
+                    <input type="password" id="password" class="form-input" placeholder="请输入WiFi密码（可为空）">
+                    <div class="error-message" id="passwordError">密码长度不足，至少需要8位字符</div>
+                </div>
+
+                <!-- 车名输入框 -->
+                <div class="form-group">
+                    <label class="form-label" for="carName">车名</label>
+                    <input type="text" id="carName" class="form-input" placeholder="请输入车名" required>
+                    <div class="error-message" id="carNameError">车名只能包含中英文、数字和标点符号</div>
+                </div>
+            </div>
+
+            <!-- 仅显示车名输入框（当车名重复时） -->
+            <div class="form-section car-name-only" id="carNameOnly">
+                <p class="status-message" style="color: #e74c3c; margin-bottom: 20px;">车名已存在，请重新输入车名</p>
+                <div class="form-group">
+                    <label class="form-label" for="carNameRetry">车名</label>
+                    <input type="text" id="carNameRetry" class="form-input" placeholder="请输入新的车名" required>
+                    <div class="error-message" id="carNameRetryError">车名只能包含中英文、数字和标点符号</div>
+                </div>
+            </div>
+
+            <button type="submit" class="submit-btn" id="submitBtn">开始配网</button>
+        </form>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <div class="status-message">正在配网中，请稍候...</div>
+        </div>
+
+        <div class="status-message" id="statusMessage"></div>
+    </div>
+
+    <script>
+        class WiFiConfig {
+            constructor() {
+                this.wifiList = [];
+                this.isRetryMode = false;
+                this.currentFormData = {};
+                this.initEventListeners();
+                this.loadWiFiList();
+            }
+
+            initEventListeners() {
+                // WiFi SSID 输入框事件
+                const wifiSsidInput = document.getElementById('wifiSsid');
+                const wifiDropdown = document.getElementById('wifiDropdown');
+                
+                wifiSsidInput.addEventListener('focus', () => {
+                    if (this.wifiList.length > 0) {
+                        this.showWiFiDropdown();
+                    }
+                });
+
+                wifiSsidInput.addEventListener('input', (e) => {
+                    this.filterWiFiList(e.target.value);
+                });
+
+                // 点击其他地方隐藏下拉框
+                document.addEventListener('click', (e) => {
+                    if (!e.target.closest('.wifi-input-container')) {
+                        wifiDropdown.style.display = 'none';
+                    }
+                });
+
+                // 刷新按钮
+                document.getElementById('refreshBtn').addEventListener('click', () => {
+                    this.loadWiFiList();
+                });
+
+                // 密码输入框验证
+                document.getElementById('password').addEventListener('blur', () => {
+                    this.validatePassword();
+                });
+
+                // 车名输入框验证
+                document.getElementById('carName').addEventListener('blur', () => {
+                    this.validateCarName('carName');
+                });
+
+                document.getElementById('carNameRetry').addEventListener('blur', () => {
+                    this.validateCarName('carNameRetry');
+                });
+
+                // 表单提交
+                document.getElementById('wifiForm').addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.handleSubmit();
+                });
+            }
+
+            async loadWiFiList() {
+                try {
+                    const refreshBtn = document.getElementById('refreshBtn');
+                    refreshBtn.innerHTML = '⟳';
+                    refreshBtn.style.animation = 'spin 1s linear infinite';
+
+                    // 这里应该调用实际的API
+                    const response = await fetch('/api/wifi/scan', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.wifiList = data.wifiList || [];
+                    } else {
+                        // 模拟数据用于演示
+                        this.wifiList = [
+                            { ssid: 'Home_WiFi', signal: -45 },
+                            { ssid: 'Office_Network', signal: -60 },
+                            { ssid: 'Guest_WiFi', signal: -70 },
+                            { ssid: 'Neighbor_5G', signal: -80 }
+                        ];
+                    }
+
+                    refreshBtn.innerHTML = '🔄';
+                    refreshBtn.style.animation = '';
+                } catch (error) {
+                    console.error('加载WiFi列表失败:', error);
+                    // 使用模拟数据
+                    this.wifiList = [
+                        { ssid: 'Home_WiFi', signal: -45 },
+                        { ssid: 'Office_Network', signal: -60 },
+                        { ssid: 'Guest_WiFi', signal: -70 },
+                        { ssid: 'Neighbor_5G', signal: -80 }
+                    ];
+                    
+                    const refreshBtn = document.getElementById('refreshBtn');
+                    refreshBtn.innerHTML = '🔄';
+                    refreshBtn.style.animation = '';
+                }
+            }
+
+            showWiFiDropdown() {
+                const dropdown = document.getElementById('wifiDropdown');
+                dropdown.innerHTML = '';
+                
+                this.wifiList.forEach(wifi => {
+                    const option = document.createElement('div');
+                    option.className = 'wifi-option';
+                    option.innerHTML = `
+                        <span>${wifi.ssid}</span>
+                        <span class="wifi-signal">${this.getSignalStrength(wifi.signal)}</span>
+                    `;
+                    option.addEventListener('click', () => {
+                        document.getElementById('wifiSsid').value = wifi.ssid;
+                        dropdown.style.display = 'none';
+                    });
+                    dropdown.appendChild(option);
+                });
+                
+                dropdown.style.display = 'block';
+            }
+
+            filterWiFiList(query) {
+                const dropdown = document.getElementById('wifiDropdown');
+                const filteredList = this.wifiList.filter(wifi => 
+                    wifi.ssid.toLowerCase().includes(query.toLowerCase())
+                );
+
+                dropdown.innerHTML = '';
+                
+                if (filteredList.length > 0) {
+                    filteredList.forEach(wifi => {
+                        const option = document.createElement('div');
+                        option.className = 'wifi-option';
+                        option.innerHTML = `
+                            <span>${wifi.ssid}</span>
+                            <span class="wifi-signal">${this.getSignalStrength(wifi.signal)}</span>
+                        `;
+                        option.addEventListener('click', () => {
+                            document.getElementById('wifiSsid').value = wifi.ssid;
+                            dropdown.style.display = 'none';
+                        });
+                        dropdown.appendChild(option);
+                    });
+                    dropdown.style.display = 'block';
+                } else {
+                    dropdown.style.display = 'none';
+                }
+            }
+
+            getSignalStrength(signal) {
+                if (signal > -50) return '📶 强';
+                if (signal > -65) return '📶 中';
+                if (signal > -80) return '📶 弱';
+                return '📶 很弱';
+            }
+
+            validatePassword() {
+                const password = document.getElementById('password').value;
+                const errorElement = document.getElementById('passwordError');
+                
+                if (password.length > 0 && password.length < 8) {
+                    errorElement.style.display = 'block';
+                    return false;
+                } else {
+                    errorElement.style.display = 'none';
+                    return true;
+                }
+            }
+
+            validateCarName(inputId) {
+                const carName = document.getElementById(inputId).value;
+                const errorElementId = inputId === 'carName' ? 'carNameError' : 'carNameRetryError';
+                const errorElement = document.getElementById(errorElementId);
+                
+                // 正则表达式：中文、英文、数字、标点符号
+                const regex = /^[\u4e00-\u9fa5a-zA-Z0-9\s\.,!?;:'"()[\]{}\-_+=@#$%^&*~`|\\/<>]*$/;
+                
+                if (!regex.test(carName)) {
+                    errorElement.style.display = 'block';
+                    return false;
+                } else {
+                    errorElement.style.display = 'none';
+                    return true;
+                }
+            }
+
+            async handleSubmit() {
+                const submitBtn = document.getElementById('submitBtn');
+                
+                if (this.isRetryMode) {
+                    // 重试模式，只验证车名
+                    if (!this.validateCarName('carNameRetry')) {
+                        return;
+                    }
+                    this.currentFormData.carName = document.getElementById('carNameRetry').value;
+                } else {
+                    // 完整模式，验证所有字段
+                    if (!this.validatePassword() || !this.validateCarName('carName')) {
+                        return;
+                    }
+
+                    this.currentFormData = {
+                        wifiSsid: document.getElementById('wifiSsid').value,
+                        password: document.getElementById('password').value || '',
+                        carName: document.getElementById('carName').value
+                    };
+                }
+
+                // 禁用提交按钮，显示加载状态
+                submitBtn.disabled = true;
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('statusMessage').textContent = '';
+
+                try {
+                    await this.submitConfig();
+                } catch (error) {
+                    console.error('提交失败:', error);
+                    this.showError('网络错误，请重试');
+                } finally {
+                    submitBtn.disabled = false;
+                    document.getElementById('loading').style.display = 'none';
+                }
+            }
+
+            async submitConfig() {
+                try {
+                    // 提交配置
+                    const response = await fetch('/api/wifi/config', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(this.currentFormData)
+                    });
+
+                    const result = await response.json();
+                    
+                    if (result.code === 101) {
+                        this.showError('WiFi密码或用户名错误，请重新输入');
+                        this.resetToFullForm();
+                        return;
+                    } else if (result.code === 102) {
+                        this.showCarNameRetry();
+                        return;
+                    }
+
+                    // 开始轮询状态
+                    await this.pollStatus();
+                    
+                } catch (error) {
+                    throw error;
+                }
+            }
+
+            async pollStatus() {
+                let attempts = 0;
+                const maxAttempts = 30; // 最多轮询30次
+
+                const poll = async () => {
+                    if (attempts >= maxAttempts) {
+                        this.showError('配网超时，请重试');
+                        return;
+                    }
+
+                    try {
+                        const response = await fetch('/api/wifi/status', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            }
+                        });
+
+                        const result = await response.json();
+                        
+                        if (result.code === 0) {
+                            this.showSuccess('配网成功！');
+                            return;
+                        } else if (result.code === 101) {
+                            this.showError('WiFi密码或用户名错误，请重新输入');
+                            this.resetToFullForm();
+                            return;
+                        } else if (result.code === 102) {
+                            this.showCarNameRetry();
+                            return;
+                        }
+
+                        // 继续轮询
+                        attempts++;
+                        setTimeout(poll, 2000); // 2秒后再次轮询
+                        
+                    } catch (error) {
+                        console.error('状态查询失败:', error);
+                        attempts++;
+                        setTimeout(poll, 2000);
+                    }
+                };
+
+                poll();
+            }
+
+            showCarNameRetry() {
+                this.isRetryMode = true;
+                document.getElementById('fullForm').classList.add('hidden');
+                document.getElementById('carNameOnly').classList.add('show');
+                document.getElementById('submitBtn').textContent = '重新提交';
+                document.getElementById('carNameRetry').value = '';
+                document.getElementById('carNameRetryError').style.display = 'none';
+            }
+
+            resetToFullForm() {
+                this.isRetryMode = false;
+                document.getElementById('fullForm').classList.remove('hidden');
+                document.getElementById('carNameOnly').classList.remove('show');
+                document.getElementById('submitBtn').textContent = '开始配网';
+                
+                // 清空密码框
+                document.getElementById('password').value = '';
+                document.getElementById('passwordError').style.display = 'none';
+            }
+
+            showError(message) {
+                document.getElementById('statusMessage').textContent = message;
+                document.getElementById('statusMessage').style.color = '#e74c3c';
+            }
+
+            showSuccess(message) {
+                document.getElementById('statusMessage').textContent = message;
+                document.getElementById('statusMessage').style.color = '#27ae60';
+                
+                // 成功后重置表单
+                setTimeout(() => {
+                    this.resetForm();
+                }, 3000);
+            }
+
+            resetForm() {
+                this.isRetryMode = false;
+                document.getElementById('fullForm').classList.remove('hidden');
+                document.getElementById('carNameOnly').classList.remove('show');
+                document.getElementById('submitBtn').textContent = '开始配网';
+                
+                // 清空所有输入框
+                document.getElementById('wifiSsid').value = '';
+                document.getElementById('password').value = '';
+                document.getElementById('carName').value = '';
+                document.getElementById('carNameRetry').value = '';
+                
+                // 隐藏所有错误信息
+                document.querySelectorAll('.error-message').forEach(el => {
+                    el.style.display = 'none';
+                });
+                
+                document.getElementById('statusMessage').textContent = '';
+            }
+        }
+
+        // 初始化应用
+        document.addEventListener('DOMContentLoaded', () => {
+            new WiFiConfig();
+        });
+    </script>
+</body>
+</html>
