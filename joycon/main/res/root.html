@@ -645,7 +645,7 @@
             xhr.setRequestHeader('Accept', 'application/json');
             xhr.timeout = (time_out || 10) * 1000;
             if (ssid != '')
-                xhr.send(JSON.stringify({ ssid: ssid, pswd: pswd, carname: carname }));
+                xhr.send(JSON.stringify({ ssid: ssid, pswd: pswd, name: carname }));
             else
                 xhr.send()
         }
@@ -663,7 +663,7 @@
                 });
                 var ops = '<option>选择WIFI...</option>';
                 for (var i = 0; i < list.length; ++i) {
-                    ops += '<option>' + list[i] + '</option>'
+                    ops += '<option>' + list[i].ssid + '</option>'
                 };
                 ap.innerHTML = ops; ab.disabled = false; togAp(null, true); ab.onclick = togAp
             }

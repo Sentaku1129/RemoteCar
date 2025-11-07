@@ -191,6 +191,7 @@ esp_err_t joystick_read_right_normalized(joystick_normalized_t *value)
 
 void joystick_task(void *arg)
 {
+    joystick_init();
     joystick_normalized_t left_norm = {0}, right_norm = {0};
     while (1)
     {

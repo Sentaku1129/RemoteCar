@@ -81,6 +81,30 @@ static esp_err_t check_sys_config(void)
         goto check_sys_finally;
     }
 
+    size_t require_size = 0;
+
+    // ssid
+    ret = nvs_get_str(nvs_handle, NVS_SYS_WIFI_SSID, g_dev_config.dev_ssid, &require_size);
+    if(ret != ESP_OK)
+    {
+        ESP_LOGI(__func__, "read nvs fail");
+        goto check_sys_finally;
+    }
+    if(require_size == 0)
+    {
+        ESP_LOGI(__func__, "no wifi ssid");
+        ret = ESP_FAIL;
+        goto check_sys_finally;
+    }
+
+    // pswd
+    ret = nvs_get_str(nvs_handle, NVS_SYS_WIFI_SSID, g_dev_config.dev_ssid, &require_size);
+    if(ret != ESP_OK)
+    {
+        ESP_LOGI(__func__, "read nvs fail");
+        goto check_sys_finally;
+    }
+
 check_sys_finally:
     nvs_close(nvs_handle);
     return ret;
@@ -327,10 +351,10 @@ static esp_err_t config_uri_handler(httpd_req_t *req)
     ESP_LOGI(__func__, "Received request body: %s", body);
 
     cJSON *root = cJSON_Parse(body);
+    user_free(__func__, body);
     if(root == NULL)
     {
         ESP_LOGI(__func__, "Wifi config body error");
-        user_free(__func__, body);
         httpd_resp_set_type(req, "application/json");
         httpd_resp_send(req, "{\"code\": \"400\"}", HTTPD_RESP_USE_STRLEN);
         return ESP_FAIL;
@@ -342,15 +366,13 @@ static esp_err_t config_uri_handler(httpd_req_t *req)
     p = cJSON_GetObjectItem(root, "ssid") ? cJSON_GetObjectItem(root, "ssid")->valuestring : "";
     strcpy(g_dev_config.dev_ssid, p);
     p = cJSON_GetObjectItem(root, "pswd") ? cJSON_GetObjectItem(root, "pswd")->valuestring : "";
-    strcpy(g_dev_config.dev_ssid, p);
+    strcpy(g_dev_config.dev_pswd, p);
     p = cJSON_GetObjectItem(root, "name") ? cJSON_GetObjectItem(root, "name")->valuestring : "";
-    strcpy(g_dev_config.dev_ssid, p);
+    strcpy(g_dev_config.dev_name, p);
 
     ESP_LOGI(__func__, "ssid: %s, pswd: %s, name: %s", g_dev_config.dev_ssid, g_dev_config.dev_pswd, g_dev_config.dev_name);
 
-
     cJSON_Delete(root);
-    user_free(__func__, body);
 
     httpd_resp_set_type(req, "application/json");
     httpd_resp_send(req, "{\"code\":\"200\"}", HTTPD_RESP_USE_STRLEN);
@@ -427,7 +449,7 @@ static httpd_handle_t start_web_server(void)
     };
 
     ESP_LOGI(__func__, "server port: %d", config.server_port);
-    if(httpd_start(&server, &config))
+    if(httpd_start(&server, &config) == ESP_OK)
     {
         ESP_LOGI(__func__, "Register URI handlers");
         httpd_register_uri_handler(server, &root_uri);
@@ -473,8 +495,8 @@ void app_main(void)
         start_dns_server(&config);
     }
 
-    xTaskCreatePinnedToCore(button_task, "button_task", 1024 * 2, NULL, 10, NULL, 0);
-    xTaskCreatePinnedToCore(joystick_task, "joystick_task", 1024 * 2, NULL, 5, NULL, 0);
+    xTaskCreatePinnedToCore(button_task, "button_task", 1024 * 4, NULL, 10, NULL, 0);
+    xTaskCreatePinnedToCore(joystick_task, "joystick_task", 1024 * 4, NULL, 5, NULL, 0);
     while (1)
     {
         vTaskDelay(pdMS_TO_TICKS(1000));
