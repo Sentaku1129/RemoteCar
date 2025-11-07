@@ -1,615 +1,707 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html>
+
 <head>
+    <meta http-equiv='Content-Type' content='text/html; charset=utf-8' />
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WiFi 网络配网</title>
-    <style>
-        * {
-            margin: 0;
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>WiFi配置</title>
+
+    <style media="screen">
+        *,
+        *:before,
+        *:after {
             padding: 0;
+            margin: 0;
             box-sizing: border-box;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-color: #080710;
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 20px;
-        }
-
-        .container {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-            padding: 40px;
-            width: 100%;
-            max-width: 500px;
-        }
-
-        .title {
-            text-align: center;
-            color: #333;
-            font-size: 28px;
-            font-weight: 600;
-            margin-bottom: 30px;
-        }
-
-        .form-group {
-            margin-bottom: 25px;
-        }
-
-        .form-label {
-            display: block;
-            margin-bottom: 8px;
-            color: #555;
-            font-weight: 500;
-            font-size: 14px;
-        }
-
-        .form-input {
-            width: 100%;
-            padding: 12px 16px;
-            border: 2px solid #e1e5e9;
-            border-radius: 8px;
-            font-size: 16px;
-            transition: border-color 0.3s ease;
-            background-color: #fafafa;
-        }
-
-        .form-input:focus {
-            outline: none;
-            border-color: #667eea;
-            background-color: white;
-        }
-
-        .wifi-input-container {
             position: relative;
         }
 
-        .wifi-dropdown {
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
-            background: white;
-            border: 2px solid #e1e5e9;
-            border-top: none;
-            border-radius: 0 0 8px 8px;
-            max-height: 200px;
-            overflow-y: auto;
-            z-index: 1000;
-            display: none;
-        }
-
-        .wifi-option {
-            padding: 12px 16px;
-            cursor: pointer;
-            border-bottom: 1px solid #f0f0f0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .wifi-option:hover {
-            background-color: #f8f9fa;
-        }
-
-        .wifi-option:last-child {
-            border-bottom: none;
-        }
-
-        .wifi-signal {
-            font-size: 12px;
-            color: #888;
-        }
-
-        .refresh-btn {
-            position: absolute;
-            right: 10px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: none;
-            border: none;
-            color: #667eea;
-            cursor: pointer;
-            font-size: 16px;
-            padding: 5px;
-        }
-
-        .refresh-btn:hover {
-            color: #5a6fd8;
-        }
-
-        .error-message {
-            color: #e74c3c;
-            font-size: 14px;
-            margin-top: 5px;
-            display: none;
-        }
-
-        .submit-btn {
+        .background {
             width: 100%;
-            padding: 14px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            height: 100%;
+            position: fixed;
+            left: 0;
+            top: 0;
+            overflow: hidden;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .background .shape {
+            height: 200px;
+            width: 200px;
+            position: absolute;
+            border-radius: 50%;
+        }
+
+        .shape:first-child {
+            background: linear-gradient(#1845ad, #23a2f6);
+            left: calc(50% - 250px);
+            top: calc(50% - 300px);
+        }
+
+        .shape:last-child {
+            background: linear-gradient(to right, #ff512f, #f09819);
+            right: calc(50% - 250px);
+            bottom: calc(50% - 300px);
+        }
+
+        /* 响应式调整背景形状 */
+        @media (min-width: 768px) {
+            .background .shape {
+                height: 250px;
+                width: 250px;
+            }
+
+            .shape:first-child {
+                left: calc(50% - 280px);
+                top: calc(50% - 320px);
+            }
+
+            .shape:last-child {
+                right: calc(50% - 280px);
+                bottom: calc(50% - 320px);
+            }
+        }
+
+        /* 小屏幕优化 */
+        @media (max-width: 480px) {
+            .background .shape {
+                height: 150px;
+                width: 150px;
+            }
+
+            .shape:first-child {
+                left: calc(50% - 200px);
+                top: calc(50% - 250px);
+            }
+
+            .shape:last-child {
+                right: calc(50% - 200px);
+                bottom: calc(50% - 250px);
+            }
+        }
+
+        fieldset {
+            width: 100%;
+            max-width: 400px;
+            min-height: 450px;
+            background-color: rgba(255, 255, 255, 0.13);
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 0 40px rgba(8, 7, 16, 0.6);
+            padding: 30px 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* 平板和桌面端样式 */
+        @media (min-width: 768px) {
+            fieldset {
+                padding: 50px 35px;
+            }
+        }
+
+        fieldset * {
+            font-family: 'Poppins', sans-serif;
+            color: #ffffff;
+            letter-spacing: 0.5px;
+            outline: none;
             border: none;
-            border-radius: 8px;
+        }
+
+        fieldset h3 {
+            font-size: 24px;
+            font-weight: 500;
+            line-height: 1.4;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        @media (min-width: 768px) {
+            fieldset h3 {
+                font-size: 32px;
+                line-height: 42px;
+            }
+        }
+
+        fieldset h4 {
+            text-align: center;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        @media (min-width: 768px) {
+            fieldset h4 {
+                font-size: 16px;
+            }
+        }
+
+        label {
+            display: block;
+            margin-top: 10px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        @media (min-width: 768px) {
+            label {
+                font-size: 16px;
+            }
+        }
+
+        input {
+            display: block;
+            height: 45px;
+            width: 100%;
+            background-color: rgba(255, 255, 255, 0.07);
+            border-radius: 3px;
+            padding: 0px 10px;
+            margin-top: 5px;
+            font-size: 14px;
+            font-weight: 300;
+        }
+
+        @media (min-width: 768px) {
+            input {
+                height: 50px;
+            }
+        }
+
+        input.error {
+            border: 2px solid #ff6b6b;
+            background-color: rgba(255, 107, 107, 0.1);
+        }
+
+        ::placeholder {
+            color: #e5e5e5;
+        }
+
+        button {
+            margin-top: 25px;
+            width: 100%;
+            background-image: linear-gradient(to right, #acb6e5, #86fde8);
+            color: #080710;
+            padding: 12px 0;
             font-size: 16px;
             font-weight: 600;
+            border-radius: 5px;
             cursor: pointer;
-            transition: transform 0.2s ease;
+            transition: transform 0.2s;
         }
 
-        .submit-btn:hover {
-            transform: translateY(-2px);
+        @media (min-width: 768px) {
+            button {
+                margin-top: 35px;
+                padding: 15px 0;
+                font-size: 18px;
+            }
         }
 
-        .submit-btn:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-            transform: none;
+        button:active {
+            transform: scale(0.98);
         }
 
-        .loading {
-            display: none;
-            text-align: center;
-            margin-top: 20px;
+        .search_wifi {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            gap: 10px;
         }
 
-        .spinner {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #667eea;
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 10px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .status-message {
-            text-align: center;
-            margin-top: 15px;
+        #networks {
+            margin-top: 0px;
+            width: auto;
+            min-width: 80px;
+            background-color: rgba(255, 255, 255, 0);
+            color: #080710;
+            padding: 5px 10px;
             font-size: 14px;
-            color: #666;
+            font-weight: 600;
+            border-radius: 5px;
+            cursor: pointer;
+            background-image: none;
+            white-space: nowrap;
         }
 
-        .car-name-only {
-            display: none;
+        @media (min-width: 768px) {
+            #networks {
+                font-size: 16px;
+            }
         }
 
-        .car-name-only.show {
+        #submit {
+            margin-top: 25px;
+            width: 100%;
+            background-image: linear-gradient(to right, #acb6e5, #86fde8);
+            color: #080710;
+            padding: 12px 0;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        @media (min-width: 768px) {
+            #submit {
+                margin-top: 35px;
+                padding: 15px 0;
+                font-size: 18px;
+            }
+        }
+
+        space {
             display: block;
+            height: 15px;
         }
 
-        .form-section.hidden {
+        @media (min-width: 768px) {
+            space {
+                height: 20px;
+            }
+        }
+
+        select {
+            display: block;
+            height: 45px;
+            width: 100%;
+            background-color: rgba(255, 255, 255, 0.00);
+            border-radius: 3px;
+            padding: 0px 10px;
+            margin-top: 5px;
+            font-size: 14px;
+            font-weight: 300;
+            appearance: none;
+        }
+
+        @media (min-width: 768px) {
+            select {
+                height: 50px;
+            }
+        }
+
+        select option {
+            color: black;
+            border-radius: 3px;
+            background-color: rgba(255, 255, 255, 0.07);
+        }
+
+        #arrow {
+            color: #888;
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        #dropdown {
+            position: relative;
+            height: 45px;
+            width: 100%;
+            padding: 0px 10px;
+            margin-top: 5px;
+            font-size: 14px;
+            font-weight: 300;
+            border-radius: 3px;
+            background-color: rgba(255, 255, 255, 0.07);
+        }
+
+        @media (min-width: 768px) {
+            #dropdown {
+                height: 50px;
+            }
+        }
+
+        #st {
+            color: #ff6b6b;
+            font-size: 12px;
+            text-align: center;
+            margin-top: 10px;
+            min-height: 20px;
+        }
+
+        @media (min-width: 768px) {
+            #st {
+                font-size: 14px;
+            }
+        }
+
+        .error-hint {
+            color: #ff6b6b;
+            font-size: 11px;
+            margin-top: 3px;
             display: none;
+        }
+
+        @media (min-width: 768px) {
+            .error-hint {
+                font-size: 12px;
+            }
+        }
+
+        #dropdown,
+        #f2,
+        #f3,
+        #bk2 {
+            display: none
+        }
+
+        /* 小屏幕优化 */
+        @media (max-width: 374px) {
+            fieldset {
+                padding: 20px 15px;
+            }
+
+            fieldset h3 {
+                font-size: 20px;
+            }
+
+            button {
+                font-size: 14px;
+                padding: 10px 0;
+            }
+        }
+
+        /* 横屏优化 */
+        @media (max-height: 600px) and (orientation: landscape) {
+            body {
+                padding: 10px;
+            }
+
+            fieldset {
+                min-height: auto;
+                padding: 20px;
+            }
+
+            fieldset h3 {
+                font-size: 20px;
+                margin-bottom: 5px;
+            }
+
+            label {
+                margin-top: 5px;
+            }
+
+            space {
+                height: 10px;
+            }
+
+            button {
+                margin-top: 15px;
+                padding: 10px 0;
+            }
+
+            .background .shape {
+                height: 120px;
+                width: 120px;
+            }
+
+            .shape:first-child {
+                left: calc(50% - 180px);
+                top: calc(50% - 200px);
+            }
+
+            .shape:last-child {
+                right: calc(50% - 180px);
+                bottom: calc(50% - 200px);
+            }
         }
     </style>
 </head>
+
 <body>
-    <div class="container">
-        <h1 class="title">WiFi 网络配网</h1>
-        
-        <form id="wifiForm">
-            <div class="form-section" id="fullForm">
-                <!-- WiFi SSID 输入框 -->
-                <div class="form-group">
-                    <label class="form-label" for="wifiSsid">WiFi SSID</label>
-                    <div class="wifi-input-container">
-                        <input type="text" id="wifiSsid" class="form-input" placeholder="请选择或输入WiFi名称" required>
-                        <button type="button" class="refresh-btn" id="refreshBtn" title="刷新WiFi列表">🔄</button>
-                        <div class="wifi-dropdown" id="wifiDropdown"></div>
-                    </div>
-                </div>
-
-                <!-- 密码输入框 -->
-                <div class="form-group">
-                    <label class="form-label" for="password">WiFi 密码</label>
-                    <input type="password" id="password" class="form-input" placeholder="请输入WiFi密码（可为空）">
-                    <div class="error-message" id="passwordError">密码长度不足，至少需要8位字符</div>
-                </div>
-
-                <!-- 车名输入框 -->
-                <div class="form-group">
-                    <label class="form-label" for="carName">车名</label>
-                    <input type="text" id="carName" class="form-input" placeholder="请输入车名" required>
-                    <div class="error-message" id="carNameError">车名只能包含中英文、数字和标点符号</div>
-                </div>
-            </div>
-
-            <!-- 仅显示车名输入框（当车名重复时） -->
-            <div class="form-section car-name-only" id="carNameOnly">
-                <p class="status-message" style="color: #e74c3c; margin-bottom: 20px;">车名已存在，请重新输入车名</p>
-                <div class="form-group">
-                    <label class="form-label" for="carNameRetry">车名</label>
-                    <input type="text" id="carNameRetry" class="form-input" placeholder="请输入新的车名" required>
-                    <div class="error-message" id="carNameRetryError">车名只能包含中英文、数字和标点符号</div>
-                </div>
-            </div>
-
-            <button type="submit" class="submit-btn" id="submitBtn">开始配网</button>
-        </form>
-
-        <div class="loading" id="loading">
-            <div class="spinner"></div>
-            <div class="status-message">正在配网中，请稍候...</div>
-        </div>
-
-        <div class="status-message" id="statusMessage"></div>
+    <div class="background">
+        <div class="shape"></div>
+        <div class="shape"></div>
     </div>
 
+    <fieldset>
+        <div id="f1">
+            <h3>设备WiFi配置</h3>
+            <div class="search_wifi">
+                <label for="ssid">WiFi名称</label>
+                <button id="networks" type="button"></button>
+            </div>
+
+            <input type="text" id="ssid" placeholder="请输入WiFi名称" required>
+            <div id="dropdown">
+                <span id="arrow">&#x25bc;</span>
+                <select id="aplist" name="aplist" class="input"></select>
+            </div>
+            <space></space>
+
+            <label for="pswd">WiFi密码</label>
+            <input type="password" id="pswd" placeholder="请输入WiFi密码" required>
+            
+            <space></space>
+            <label for="carname">小车名</label>
+            <input type="text" id="carname" placeholder="只能使用字母和符号，最多15位" maxlength="15" required>
+            <div class="error-hint" id="carname-error">只能包含字母和符号，不能包含中文或数字</div>
+
+            <h4 id='st'></h4>
+            <button id="submit">请连接WiFi</button>
+        </div>
+        <div id="f2">
+            <h3>配置成功!</h3>
+            <div id="i">
+                <h4>WIFI已成功连接！<br /><br />注意稍后指示灯是否变为绿色常亮</h4>
+            </div>
+        </div>
+        <div id="f3">
+            <h3>连接中...</h3>
+            <button id="bk2">返回配置页面</button>
+        </div>
+    </fieldset>
+
     <script>
-        class WiFiConfig {
-            constructor() {
-                this.wifiList = [];
-                this.isRetryMode = false;
-                this.currentFormData = {};
-                this.initEventListeners();
-                this.loadWiFiList();
-            }
-
-            initEventListeners() {
-                // WiFi SSID 输入框事件
-                const wifiSsidInput = document.getElementById('wifiSsid');
-                const wifiDropdown = document.getElementById('wifiDropdown');
-                
-                wifiSsidInput.addEventListener('focus', () => {
-                    if (this.wifiList.length > 0) {
-                        this.showWiFiDropdown();
-                    }
-                });
-
-                wifiSsidInput.addEventListener('input', (e) => {
-                    this.filterWiFiList(e.target.value);
-                });
-
-                // 点击其他地方隐藏下拉框
-                document.addEventListener('click', (e) => {
-                    if (!e.target.closest('.wifi-input-container')) {
-                        wifiDropdown.style.display = 'none';
-                    }
-                });
-
-                // 刷新按钮
-                document.getElementById('refreshBtn').addEventListener('click', () => {
-                    this.loadWiFiList();
-                });
-
-                // 密码输入框验证
-                document.getElementById('password').addEventListener('blur', () => {
-                    this.validatePassword();
-                });
-
-                // 车名输入框验证
-                document.getElementById('carName').addEventListener('blur', () => {
-                    this.validateCarName('carName');
-                });
-
-                document.getElementById('carNameRetry').addEventListener('blur', () => {
-                    this.validateCarName('carNameRetry');
-                });
-
-                // 表单提交
-                document.getElementById('wifiForm').addEventListener('submit', (e) => {
-                    e.preventDefault();
-                    this.handleSubmit();
-                });
-            }
-
-            async loadWiFiList() {
-                try {
-                    const refreshBtn = document.getElementById('refreshBtn');
-                    refreshBtn.innerHTML = '⟳';
-                    refreshBtn.style.animation = 'spin 1s linear infinite';
-
-                    // 这里应该调用实际的API
-                    const response = await fetch('/api/wifi/scan', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        }
-                    });
-
-                    if (response.ok) {
-                        const data = await response.json();
-                        this.wifiList = data.wifiList || [];
-                    } else {
-                        // 模拟数据用于演示
-                        this.wifiList = [
-                            { ssid: 'Home_WiFi', signal: -45 },
-                            { ssid: 'Office_Network', signal: -60 },
-                            { ssid: 'Guest_WiFi', signal: -70 },
-                            { ssid: 'Neighbor_5G', signal: -80 }
-                        ];
-                    }
-
-                    refreshBtn.innerHTML = '🔄';
-                    refreshBtn.style.animation = '';
-                } catch (error) {
-                    console.error('加载WiFi列表失败:', error);
-                    // 使用模拟数据
-                    this.wifiList = [
-                        { ssid: 'Home_WiFi', signal: -45 },
-                        { ssid: 'Office_Network', signal: -60 },
-                        { ssid: 'Guest_WiFi', signal: -70 },
-                        { ssid: 'Neighbor_5G', signal: -80 }
-                    ];
-                    
-                    const refreshBtn = document.getElementById('refreshBtn');
-                    refreshBtn.innerHTML = '🔄';
-                    refreshBtn.style.animation = '';
-                }
-            }
-
-            showWiFiDropdown() {
-                const dropdown = document.getElementById('wifiDropdown');
-                dropdown.innerHTML = '';
-                
-                this.wifiList.forEach(wifi => {
-                    const option = document.createElement('div');
-                    option.className = 'wifi-option';
-                    option.innerHTML = `
-                        <span>${wifi.ssid}</span>
-                        <span class="wifi-signal">${this.getSignalStrength(wifi.signal)}</span>
-                    `;
-                    option.addEventListener('click', () => {
-                        document.getElementById('wifiSsid').value = wifi.ssid;
-                        dropdown.style.display = 'none';
-                    });
-                    dropdown.appendChild(option);
-                });
-                
-                dropdown.style.display = 'block';
-            }
-
-            filterWiFiList(query) {
-                const dropdown = document.getElementById('wifiDropdown');
-                const filteredList = this.wifiList.filter(wifi => 
-                    wifi.ssid.toLowerCase().includes(query.toLowerCase())
-                );
-
-                dropdown.innerHTML = '';
-                
-                if (filteredList.length > 0) {
-                    filteredList.forEach(wifi => {
-                        const option = document.createElement('div');
-                        option.className = 'wifi-option';
-                        option.innerHTML = `
-                            <span>${wifi.ssid}</span>
-                            <span class="wifi-signal">${this.getSignalStrength(wifi.signal)}</span>
-                        `;
-                        option.addEventListener('click', () => {
-                            document.getElementById('wifiSsid').value = wifi.ssid;
-                            dropdown.style.display = 'none';
-                        });
-                        dropdown.appendChild(option);
-                    });
-                    dropdown.style.display = 'block';
-                } else {
-                    dropdown.style.display = 'none';
-                }
-            }
-
-            getSignalStrength(signal) {
-                if (signal > -50) return '📶 强';
-                if (signal > -65) return '📶 中';
-                if (signal > -80) return '📶 弱';
-                return '📶 很弱';
-            }
-
-            validatePassword() {
-                const password = document.getElementById('password').value;
-                const errorElement = document.getElementById('passwordError');
-                
-                if (password.length > 0 && password.length < 8) {
-                    errorElement.style.display = 'block';
-                    return false;
-                } else {
-                    errorElement.style.display = 'none';
-                    return true;
-                }
-            }
-
-            validateCarName(inputId) {
-                const carName = document.getElementById(inputId).value;
-                const errorElementId = inputId === 'carName' ? 'carNameError' : 'carNameRetryError';
-                const errorElement = document.getElementById(errorElementId);
-                
-                // 正则表达式：中文、英文、数字、标点符号
-                const regex = /^[\u4e00-\u9fa5a-zA-Z0-9\s\.,!?;:'"()[\]{}\-_+=@#$%^&*~`|\\/<>]*$/;
-                
-                if (!regex.test(carName)) {
-                    errorElement.style.display = 'block';
-                    return false;
-                } else {
-                    errorElement.style.display = 'none';
-                    return true;
-                }
-            }
-
-            async handleSubmit() {
-                const submitBtn = document.getElementById('submitBtn');
-                
-                if (this.isRetryMode) {
-                    // 重试模式，只验证车名
-                    if (!this.validateCarName('carNameRetry')) {
-                        return;
-                    }
-                    this.currentFormData.carName = document.getElementById('carNameRetry').value;
-                } else {
-                    // 完整模式，验证所有字段
-                    if (!this.validatePassword() || !this.validateCarName('carName')) {
-                        return;
-                    }
-
-                    this.currentFormData = {
-                        wifiSsid: document.getElementById('wifiSsid').value,
-                        password: document.getElementById('password').value || '',
-                        carName: document.getElementById('carName').value
-                    };
-                }
-
-                // 禁用提交按钮，显示加载状态
-                submitBtn.disabled = true;
-                document.getElementById('loading').style.display = 'block';
-                document.getElementById('statusMessage').textContent = '';
-
-                try {
-                    await this.submitConfig();
-                } catch (error) {
-                    console.error('提交失败:', error);
-                    this.showError('网络错误，请重试');
-                } finally {
-                    submitBtn.disabled = false;
-                    document.getElementById('loading').style.display = 'none';
-                }
-            }
-
-            async submitConfig() {
-                try {
-                    // 提交配置
-                    const response = await fetch('/api/wifi/config', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(this.currentFormData)
-                    });
-
-                    const result = await response.json();
-                    
-                    if (result.code === 101) {
-                        this.showError('WiFi密码或用户名错误，请重新输入');
-                        this.resetToFullForm();
-                        return;
-                    } else if (result.code === 102) {
-                        this.showCarNameRetry();
-                        return;
-                    }
-
-                    // 开始轮询状态
-                    await this.pollStatus();
-                    
-                } catch (error) {
-                    throw error;
-                }
-            }
-
-            async pollStatus() {
-                let attempts = 0;
-                const maxAttempts = 30; // 最多轮询30次
-
-                const poll = async () => {
-                    if (attempts >= maxAttempts) {
-                        this.showError('配网超时，请重试');
-                        return;
-                    }
-
-                    try {
-                        const response = await fetch('/api/wifi/status', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            }
-                        });
-
-                        const result = await response.json();
-                        
-                        if (result.code === 0) {
-                            this.showSuccess('配网成功！');
-                            return;
-                        } else if (result.code === 101) {
-                            this.showError('WiFi密码或用户名错误，请重新输入');
-                            this.resetToFullForm();
-                            return;
-                        } else if (result.code === 102) {
-                            this.showCarNameRetry();
-                            return;
-                        }
-
-                        // 继续轮询
-                        attempts++;
-                        setTimeout(poll, 2000); // 2秒后再次轮询
-                        
-                    } catch (error) {
-                        console.error('状态查询失败:', error);
-                        attempts++;
-                        setTimeout(poll, 2000);
-                    }
+        var $ = function (selector) {
+            return document.querySelector(selector)
+        };
+        var ab = $('#networks');
+        var ap = $('#aplist');
+        var stopAll = false, ra, rs, submitted = false;
+        
+        function show(f, y) {
+            if (y == null)
+                y = f;
+            $(f).style.display = y == f ? 'block' : 'none'
+        }
+        
+        function hide(f) {
+            $(f).style.display = 'none'
+        }
+        
+        function to(cb, x) {
+            return setTimeout(cb, 1000 * x)
+        }
+        
+        function refr() {
+            if (!stopAll)
+                fetch('/status', 'GET', newSt, 4)
+        }
+        
+        function cur(f) {
+            show('#f1', f);
+            show('#f2', f);
+            show('#f3', f)
+        }
+        
+        // 校验小车名：只允许字母和符号，不允许中文和数字
+        function validateCarname(name) {
+            if (!name || name.length === 0) {
+                return {
+                    valid: false,
+                    message: '小车名不能为空'
                 };
-
-                poll();
             }
-
-            showCarNameRetry() {
-                this.isRetryMode = true;
-                document.getElementById('fullForm').classList.add('hidden');
-                document.getElementById('carNameOnly').classList.add('show');
-                document.getElementById('submitBtn').textContent = '重新提交';
-                document.getElementById('carNameRetry').value = '';
-                document.getElementById('carNameRetryError').style.display = 'none';
+            
+            if (name.length > 15) {
+                return {
+                    valid: false,
+                    message: '小车名长度不能超过15位'
+                };
             }
-
-            resetToFullForm() {
-                this.isRetryMode = false;
-                document.getElementById('fullForm').classList.remove('hidden');
-                document.getElementById('carNameOnly').classList.remove('show');
-                document.getElementById('submitBtn').textContent = '开始配网';
-                
-                // 清空密码框
-                document.getElementById('password').value = '';
-                document.getElementById('passwordError').style.display = 'none';
+            
+            // 检测中文字符
+            var chineseRegex = /[\u4e00-\u9fa5]/;
+            if (chineseRegex.test(name)) {
+                return {
+                    valid: false,
+                    message: '小车名不能包含中文字符'
+                };
             }
-
-            showError(message) {
-                document.getElementById('statusMessage').textContent = message;
-                document.getElementById('statusMessage').style.color = '#e74c3c';
+            
+            // 检测数字
+            var numberRegex = /[0-9]/;
+            if (numberRegex.test(name)) {
+                return {
+                    valid: false,
+                    message: '小车名不能包含数字'
+                };
             }
-
-            showSuccess(message) {
-                document.getElementById('statusMessage').textContent = message;
-                document.getElementById('statusMessage').style.color = '#27ae60';
-                
-                // 成功后重置表单
-                setTimeout(() => {
-                    this.resetForm();
-                }, 3000);
+            
+            // 只允许字母和符号（ASCII可打印字符中除去数字的部分）
+            var validRegex = /^[a-zA-Z!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~\s]+$/;
+            if (!validRegex.test(name)) {
+                return {
+                    valid: false,
+                    message: '小车名只能包含字母和符号'
+                };
             }
+            
+            return {
+                valid: true,
+                message: ''
+            };
+        }
+        
+        // 实时校验小车名输入
+        $('#carname').addEventListener('input', function() {
+            var carnameInput = $('#carname');
+            var errorHint = $('#carname-error');
+            var validation = validateCarname(this.value);
+            
+            if (this.value && !validation.valid) {
+                carnameInput.classList.add('error');
+                errorHint.style.display = 'block';
+                errorHint.innerText = validation.message;
+            } else {
+                carnameInput.classList.remove('error');
+                errorHint.style.display = 'none';
+            }
+        });
+        
+        function newSt(s, d) {
+            clearTimeout(rs);
+            rs = to(refr, 3);
+            if (s != 200) {
+                $('#st').innerText = 'Awaiting Status (' + s + ')'
+            }
+            else {
+                if (typeof d === 'string') {
+                    d = JSON.parse(d)
+                }
+                if (d == 3) {
+                    st = 'Wi-Fi 连接成功!';
+                    cur('#f2');
+                    stopAll = true;
+                    clearTimeout(ra)
+                }
+                else if (d == 7) {
+                    st = '连接中...'
+                }
+                else if (d == 6) {
+                    st = 'WIFI不可用或密码错误!';
 
-            resetForm() {
-                this.isRetryMode = false;
-                document.getElementById('fullForm').classList.remove('hidden');
-                document.getElementById('carNameOnly').classList.remove('show');
-                document.getElementById('submitBtn').textContent = '开始配网';
-                
-                // 清空所有输入框
-                document.getElementById('wifiSsid').value = '';
-                document.getElementById('password').value = '';
-                document.getElementById('carName').value = '';
-                document.getElementById('carNameRetry').value = '';
-                
-                // 隐藏所有错误信息
-                document.querySelectorAll('.error-message').forEach(el => {
-                    el.style.display = 'none';
-                });
-                
-                document.getElementById('statusMessage').textContent = '';
+                    clearTimeout(rs);
+                    cur('#f1')
+                }
+                $('#st').innerText = st
             }
         }
-
-        // 初始化应用
-        document.addEventListener('DOMContentLoaded', () => {
-            new WiFiConfig();
-        });
+        
+        function submit() {
+            ssid = $('#ssid').value;
+            pswd = $('#pswd').value;
+            carname = $('#carname').value;
+            
+            // 校验 WiFi 名称
+            if (ssid == '') {
+                alert('请输入WiFi名称');
+                return
+            }
+            
+            // 校验小车名
+            var validation = validateCarname(carname);
+            if (!validation.valid) {
+                alert(validation.message);
+                $('#carname').focus();
+                return
+            }
+            
+            submitted = true;
+            var url = '/config';
+            clearTimeout(rs);
+            fetch_config(url, 'POST', refr, 2);
+            cur('#f3');
+            rs = to(refr, 1)
+        }
+        
+        function fetch(url, method, callback, time_out) {
+            var xhr = new XMLHttpRequest();
+            xhr.onloadend = function () {
+                callback(xhr.status, xhr.responseText)
+            };
+            xhr.ontimeout = function () {
+                callback(-1, null)
+            };
+            xhr.open(method, url, true);
+            xhr.setRequestHeader('Accept', 'application/json');
+            xhr.timeout = (time_out || 10) * 1000;
+            xhr.send()
+        }
+        
+        function fetch_config(url, method, callback, time_out) {
+            var xhr = new XMLHttpRequest();
+            xhr.onloadend = function () {
+                callback(xhr.status, xhr.responseText)
+            };
+            xhr.ontimeout = function () {
+                callback(-1, null)
+            };
+            xhr.open(method, url, true);
+            xhr.setRequestHeader('Accept', 'application/json');
+            xhr.timeout = (time_out || 10) * 1000;
+            if (ssid != '')
+                xhr.send(JSON.stringify({ ssid: ssid, pswd: pswd, carname: carname }));
+            else
+                xhr.send()
+        }
+        
+        function gotAp(s, json) {
+            var list;
+            if (s === 200 && json != null) {
+                if (typeof json === 'string' && json.length > 0) {
+                    list = JSON.parse(json)
+                }
+                else if (typeof json === 'object') {
+                    list = json
+                } list.sort(function (a, b) {
+                    return b.rssi - a.rssi
+                });
+                var ops = '<option>选择WIFI...</option>';
+                for (var i = 0; i < list.length; ++i) {
+                    ops += '<option>' + list[i] + '</option>'
+                };
+                ap.innerHTML = ops; ab.disabled = false; togAp(null, true); ab.onclick = togAp
+            }
+            else {
+                ab.innerText = 'WIFI未找到 (' + s + ')';
+                ab.disabled = false;
+            }
+        }
+        
+        function togAp(ev, force) {
+            if (!force || ap.style.display == 'block') {
+                hide('#dropdown'); show('#ssid'); ab.innerText = '扫描';
+                ab.onclick = refrAp
+            } else {
+                show('#dropdown'); hide('#ssid'); ab.innerText = '手动输入'
+            }
+        }
+        
+        function refrAp() {
+            ab.innerText = '扫描中...';
+            ab.disabled = true;
+            ap.innerHTML = '<option disabled>扫描中...</option>';
+            if (!stopAll)
+                fetch('/scanap', 'GET', gotAp, 10)
+        }
+        
+        window.onload = function () {
+            ab.innerText = '搜索';
+            ab.onclick = refrAp;
+            $('#aplist').onchange = function () {
+                $('#ssid').value = $('#aplist').value
+            };
+            $('#submit').onclick = submit;
+            $('#bk2').onclick = function () {
+                cur('#f1')
+            }
+        }
     </script>
 </body>
+
 </html>
