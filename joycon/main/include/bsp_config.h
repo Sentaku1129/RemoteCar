@@ -5,6 +5,8 @@
 #define user_iram_malloc(size, caps) heap_caps_malloc(size, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM)
 #define user_free(msg, ptr) free(ptr)
 
+#define HTTPS_HOST "https://smart-car.sentaku.trade"
+
 typedef enum
 {
     beep_none = 0,
@@ -20,6 +22,21 @@ typedef struct
     char remote_mac[13];
     char dev_name[32];
 } dev_config_t;
+
+typedef struct
+{
+    char ProductKey[16];
+    char DeviceName[13];
+    char DeviceSecret[36];
+} dev_mqtt_t;
+
+typedef struct
+{
+    uint8_t *data;
+    int32_t length;
+    uint32_t maxlen;
+} file_stream_t;
+
 
 #define dev_host_web  "http://192.168.4.1"
 
