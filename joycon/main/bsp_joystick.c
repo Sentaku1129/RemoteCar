@@ -238,3 +238,13 @@ void joystick_task(void *arg)
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
+
+joystick_vatual_button_t read_left_joystick_postion()
+{
+    return joystcik_left_vitual_button;
+}
+
+joystick_vatual_button_t read_right_joystick_postion()
+{
+    return joystcik_right_vitual_button;
+}

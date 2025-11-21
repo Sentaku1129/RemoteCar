@@ -11,6 +11,6 @@
 #define i2c_LCD_SDA   18
 #define i2c_LCD_PORT  0
 
-void display_init();
+void display_task(void *arg);
 
 #endif

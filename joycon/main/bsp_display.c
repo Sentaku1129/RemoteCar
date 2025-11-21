@@ -1,9 +1,14 @@
+#include "string.h"
 #include "driver/spi_master.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "cJSON.h"
+
 #include "bsp_display.h"
+#include "bsp_http.h"
+#include "bsp_config.h"
 
 static const char *TAG = "LCD_SPI";
 
@@ -12,6 +17,8 @@ static const char *TAG = "LCD_SPI";
 #define LCD_SPI_CLOCK 8000000 // 8MHz SPI 时钟（可根据需要调整 1-20MHz）
 
 static spi_device_handle_t spi_handle = NULL;
+
+char device_list[13][10] = {0};
 
 // ==================== LCD 复位 ====================
 void lcd_reset(void)
@@ -44,12 +51,12 @@ esp_err_t lcd_spi_init(void)
 
     // 配置 SPI 总线
     spi_bus_config_t buscfg = {
-        .mosi_io_num = io_LCD_SDA, // MOSI 引脚
-        .miso_io_num = -1,           // LCD 不需要 MISO
+        .mosi_io_num = io_LCD_SDA,  // MOSI 引脚
+        .miso_io_num = -1,          // LCD 不需要 MISO
         .sclk_io_num = io_LCD_SCLK, // SCLK 引脚
-        .quadwp_io_num = -1,         // 不使用 WP
-        .quadhd_io_num = -1,         // 不使用 HD
-        .max_transfer_sz = 4096,     // 最大传输大小
+        .quadwp_io_num = -1,        // 不使用 WP
+        .quadhd_io_num = -1,        // 不使用 HD
+        .max_transfer_sz = 4096,    // 最大传输大小
     };
 
     // 初始化 SPI 总线
@@ -64,7 +71,7 @@ esp_err_t lcd_spi_init(void)
     spi_device_interface_config_t devcfg = {
         .clock_speed_hz = LCD_SPI_CLOCK, // SPI 时钟频率
         .mode = 3,                       // SPI mode 3 (CPOL=1, CPHA=1) ST7567 常用
-        .spics_io_num = io_LCD_CS,      // CS 引脚
+        .spics_io_num = io_LCD_CS,       // CS 引脚
         .queue_size = 7,                 // 事务队列大小
         .flags = SPI_DEVICE_NO_DUMMY,    // 无虚拟字节
         .pre_cb = NULL,                  // 传输前回调
@@ -252,10 +259,236 @@ void lcd_all_pixel_on(bool enable)
     }
 }
 
-void display_task(void *arg)
+typedef struct disp_menu_s
+{
+    const char *name;               // 菜单名
+    const char *desc;               // 当前菜单描述
+    struct disp_menu_s *submenus;   // 子菜单列表
+    size_t submenu_count;           // 子菜单数量
+    esp_err_t (*action)(void *arg); // 菜单执行函数
+} disp_menu_t;
+
+TaskHandle_t idle_disp_task_handle = NULL;
+
+void idle_disp_task(void *arg)
 {
     while (1)
     {
-           
+        /* code */
+    }
+}
+
+esp_err_t check_devices(void *arg)
+{
+    if (g_wifi_connected)
+    {
+        char *url = HTTPS_HOST "/check_devices";
+        char *resp = user_malloc(256, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        memset(resp, 0x00, 256);
+        xTaskCreatePinnedToCore(idle_disp_task, "idle_disp_task", 1024 * 2, "CHECK DEVICES", 2, &idle_disp_task_handle, 1);
+        esp_err_t ret = http_post(url, NULL, resp, 255);
+        if (ret == ESP_OK)
+        {
+            cJSON *root = cJSON_Parse(resp);
+            user_free(__func__, resp);
+            if (cJSON_GetObjectItem(root, "success") && cJSON_IsTrue(cJSON_GetObjectItem(root, "success")))
+            {
+                for (int i = 0; i < cJSON_GetObjectItem(root, "device_len")->valueint; i++)
+                {
+                    cJSON *item = cJSON_GetArrayItem(cJSON_GetObjectItem(root, "data"), i);
+                    if (item && item->valuestring)
+                        sprintf(device_list[i], "%s", item->valuestring);
+                }
+                cJSON_Delete(root);
+                vTaskDelete(idle_disp_task_handle);
+                return ESP_OK;
+            }
+            cJSON_Delete(root);
+            vTaskDelete(idle_disp_task_handle);
+            return ESP_FAIL;
+        }
+        else
+        {
+            user_free(__func__, resp);
+            vTaskDelete(idle_disp_task_handle);
+            return ESP_FAIL;
+        }
+    }
+    return ESP_FAIL;
+}
+
+esp_err_t bind_device(void *device)
+{
+    if (g_wifi_connected)
+    {
+        char *url = HTTPS_HOST "/bind_device";
+        char *resp = user_malloc(256, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        memset(resp, 0x00, 256);
+
+        xTaskCreatePinnedToCore(idle_disp_task, "idle_disp_task", 1024 * 2, "BOND DEVICE", 2, &idle_disp_task_handle, 1);
+
+        cJSON *root = cJSON_CreateObject();
+        cJSON_AddStringToObject(root, "mac", g_dev_config.dev_mac);
+        cJSON_AddStringToObject(root, "car", (char *)device);
+        char *body = cJSON_PrintUnformatted(root);
+        cJSON_Delete(root);
+        esp_err_t ret = http_post(url, body, resp, 255);
+        user_free(__func__, body);
+        if (ret == ESP_OK)
+        {
+            root = cJSON_Parse(resp);
+            user_free(__func__, resp);
+            if (cJSON_GetObjectItem(root, "success") && cJSON_IsTrue(cJSON_GetObjectItem(root, "success")))
+            {
+                sprintf(g_bind_car_dev.car, "%s", cJSON_GetObjectItem(root, "car")->valuestring);
+                g_bind_car_dev.is_bind = true;
+
+                cJSON_Delete(root);
+                vTaskDelete(idle_disp_task_handle);
+                return ESP_OK;
+            }
+            cJSON_Delete(root);
+            vTaskDelete(idle_disp_task_handle);
+            return ESP_FAIL;
+        }
+        else
+        {
+            user_free(__func__, resp);
+            vTaskDelete(idle_disp_task_handle);
+            return ESP_FAIL;
+        }
+    }
+    return ESP_FAIL;
+}
+
+esp_err_t unbind_device(void *arg)
+{
+    if (g_wifi_connected)
+    {
+        char *url = HTTPS_HOST "/unbind_device";
+        char *resp = user_malloc(256, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        memset(resp, 0x00, 256);
+
+        xTaskCreatePinnedToCore(idle_disp_task, "idle_disp_task", 1024 * 2, "BOND DEVICE", 2, &idle_disp_task_handle, 1);
+
+        cJSON *root = cJSON_CreateObject();
+        cJSON_AddStringToObject(root, "mac", g_dev_config.dev_mac);
+        char *body = cJSON_PrintUnformatted(root);
+        cJSON_Delete(root);
+        esp_err_t ret = http_post(url, body, resp, 255);
+        user_free(__func__, body);
+        if (ret == ESP_OK)
+        {
+            root = cJSON_Parse(resp);
+            user_free(__func__, resp);
+            if (cJSON_GetObjectItem(root, "success") && cJSON_IsTrue(cJSON_GetObjectItem(root, "success")))
+            {
+                memset(g_bind_car_dev.car, 0x00, sizeof(g_bind_car_dev.car));
+                g_bind_car_dev.is_bind = false;
+
+                cJSON_Delete(root);
+                vTaskDelete(idle_disp_task_handle);
+                return ESP_OK;
+            }
+            cJSON_Delete(root);
+            vTaskDelete(idle_disp_task_handle);
+            return ESP_FAIL;
+        }
+        else
+        {
+            user_free(__func__, resp);
+            vTaskDelete(idle_disp_task_handle);
+            return ESP_FAIL;
+        }
+    }
+    return ESP_FAIL;
+}
+
+disp_menu_t bond_menu[] = {
+    {"", "", NULL, 1, NULL},
+};
+
+disp_menu_t check_menu[] = {
+    {"bond_disp", "bond display", NULL, 1, bind_device},
+};
+
+disp_menu_t settings_menu[] = {
+    {"check_disp", "check display", check_menu, 1, check_devices},
+    {"unbond_disp", "unbond display", NULL, 0, unbind_device},
+    {"reset", "reset device", NULL, 0, NULL},
+};
+
+disp_menu_t main_menu[] = {
+    {"default_disp", "default display", NULL, 0, NULL},
+    {"setting_disp", "setting display", settings_menu, 3, NULL},
+};
+
+void draw_dashboard_screen()
+{
+    // TODO: 调用 LCD 绘图 API
+    // 显示 g_battery_level
+    // 显示 g_joy_x, g_joy_y
+    // printf("DASHBOARD: Bat:%d Joy:%d,%d\n", g_battery_level, g_joy_x, g_joy_y);
+}
+
+void draw_menu_screen(disp_menu_t *menu, int len, int sel)
+{
+    // TODO: 调用 LCD 绘图 API
+    // 遍历 menu[i].name 并打印
+    // 高亮 index == sel 的项
+    // printf("MENU: %s >\n", menu[sel].name);
+}
+
+typedef struct
+{
+    int type; // 0: 摇杆, 1: 按键
+    int id;   // 按键ID
+    int val;  // 值
+} input_event_t;
+
+QueueHandle_t input_queue;
+
+void read_input_value_task()
+{
+    while (1)
+    {
+        vTaskDelay(pdMS_TO_TICKS(200));
+    }
+}
+
+void display_task(void *arg)
+{
+    // 0: 仪表盘模式 1: 设置菜单模式
+    int disp_mode = 0;
+    disp_menu_t *curr_menu = settings_menu;
+    int curr_menu_len = 3;
+    int cursor = 0;
+
+    disp_menu_t *menu_stack[5];
+    int len_stack[5];
+    int cursor_stack[5];
+    int stack_ptr = 0;
+
+    input_event_t evt;
+    while (1)
+    {
+        if (xQueueReceive(input_queue, &evt, pdMS_TO_TICKS(20)) == pdTRUE)
+        {
+            if (disp_mode == 0)
+            {
+            }
+            else if (disp_mode == 1)
+            {
+            }
+        }
+
+        if (disp_mode == 0)
+        {
+            draw_dashboard_screen();
+        }
+        else
+        {
+            draw_menu_screen(curr_menu, curr_menu_len, cursor);
+        }
     }
 }

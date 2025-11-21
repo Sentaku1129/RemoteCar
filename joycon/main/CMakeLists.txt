@@ -5,6 +5,8 @@ set (srcs
     "bsp_key_fsm.c"
     "bsp_joystick.c"
     "bsp_dns.c"
+    "bsp_display.c"
+    "bsp_http.c"
 )
 
 set (res

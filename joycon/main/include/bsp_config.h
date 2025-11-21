@@ -37,6 +37,13 @@ typedef struct
     uint32_t maxlen;
 } file_stream_t;
 
+typedef struct
+{
+    char car[13];
+    bool is_bind;
+} bind_car_dev_t;
+
+
 
 #define dev_host_web  "http://192.168.4.1"
 
@@ -48,6 +55,11 @@ typedef struct
 // soft ap
 #define SOFT_AP_SSID        "JOYSTICK"
 #define SOFT_AP_PSWD        "88888888"
+
+extern bool g_wifi_connected;
+
+extern dev_config_t g_dev_config;
+extern bind_car_dev_t g_bind_car_dev;
 
 extern const char root_start[]         asm("_binary_root_html_start");
 extern const char root_end[]           asm("_binary_root_html_end");

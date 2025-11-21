@@ -23,6 +23,8 @@
 #include "bsp_config.h"
 #include "bsp_joystick.h"
 #include "bsp_dns.h"
+#include "bsp_http.h"
+#include "bsp_display.h"
 
 #define BEEP_GPIO GPIO_NUM_4
 
@@ -30,6 +32,7 @@ bool g_beep_status = true;
 bool g_wifi_connected = false;
 int g_wifi_con_status = 0;
 dev_config_t g_dev_config = {0};
+bind_car_dev_t g_bind_car_dev = {.car = {0}, .is_bind = false};
 dev_mqtt_t g_dev_mqtt = {0};
 esp_mqtt_client_handle_t g_mqtt_client = NULL;
 
@@ -599,107 +602,10 @@ static void start_mqtt_app(void)
     esp_mqtt_client_start(g_mqtt_client);
 }
 
-esp_err_t http_event_handler(esp_http_client_event_t *evt)
-{
-    switch (evt->event_id)
-    {
-    case HTTP_EVENT_ERROR:
-        ESP_LOGD(__func__, "HTTP_EVENT_ERROR");
-        break;
-
-    case HTTP_EVENT_ON_CONNECTED:
-        ESP_LOGD(__func__, "HTTP_EVENT_ON_CONNECTED");
-        break;
-
-    case HTTP_EVENT_HEADER_SENT:
-        ESP_LOGD(__func__, "HTTP_EVENT_HEADER_SENT");
-        break;
-
-    case HTTP_EVENT_ON_HEADER:
-        ESP_LOGD(__func__, "HTTP_EVENT_ON_HEADER");
-        break;
-
-    case HTTP_EVENT_ON_DATA:
-    {
-        file_stream_t *user_data = (file_stream_t *)evt->user_data;
-        if (!esp_http_client_is_chunked_response(evt->client))
-        {
-            if (user_data->length == 0)
-                ESP_LOGI(__func__, "HTTP_EVENT_ON_DATA");
-        }
-        if (user_data->length + evt->data_len >= user_data->maxlen)
-        {
-            ESP_LOGE(__func__, "data buffer overlow!");
-            user_data->length = -1;
-            esp_http_client_close(evt->client);
-        }
-        else
-        {
-            memcpy(user_data->data + user_data->length, evt->data, evt->data_len);
-            user_data->length += evt->data_len;
-        }
-    }
-    break;
-
-    case HTTP_EVENT_ON_FINISH:
-        ESP_LOGD(__func__, "HTTP_EVENT_ON_FINISH");
-        break;
-
-    default:
-        break;
-    }
-    return ESP_OK;
-}
-
-esp_err_t http_post(const char *url, char *body, char *resp, uint32_t len)
-{
-    file_stream_t http_data = {
-        .data = (resp == NULL ? (uint8_t *)resp : NULL),
-        .length = 0,
-        .maxlen = len,
-    };
-
-    esp_http_client_config_t config = {
-        .url = url,
-        .method = HTTP_METHOD_POST,
-        .event_handler = http_event_handler,
-        .user_data = &http_data,
-        .timeout_ms = 30000,
-    };
-
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-
-    if (body)
-    {
-        esp_http_client_set_header(client, "Content-type", "application/json");
-        esp_http_client_set_post_field(client, body, strlen(body));
-    }
-
-    esp_err_t err = esp_http_client_perform(client);
-    if (err == ESP_OK)
-    {
-        ESP_LOGI(__func__, "http post status = %d, coentent length = %lld",
-                 esp_http_client_get_status_code(client),
-                 esp_http_client_get_content_length(client));
-
-        if (esp_http_client_get_content_length(client) < 0)
-        {
-            esp_http_client_cleanup(client);
-            return ESP_FAIL;
-        }
-    }
-    else
-    {
-        ESP_LOGD(__func__, "http post request failed: %s", esp_err_to_name(err));
-    }
-    esp_http_client_cleanup(client);
-    return err;
-}
-
 static void get_device_info()
 {
     char *resp = user_malloc(256, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    const char *url = HTTPS_HOST "register_device";
+    const char *url = HTTPS_HOST "/register_device";
     cJSON *root = cJSON_CreateObject();
     cJSON_AddNumberToObject(root, "type", 2);
     cJSON_AddStringToObject(root, "mac", g_dev_config.dev_mac);
@@ -714,13 +620,13 @@ try_get_dev_info:
 
     ret = http_post(url, body, resp, 256);
 
-    if(retry > 12)
+    if (retry > 12)
     {
         esp_restart();
         vTaskDelay(pdMS_TO_TICKS(5000));
     }
 
-    if(ret != ESP_OK)
+    if (ret != ESP_OK)
     {
         retry++;
         ESP_LOGE(__func__, "device info get err! retry times: %d", retry);
@@ -730,7 +636,7 @@ try_get_dev_info:
     else
     {
         root = cJSON_Parse(resp);
-        if(root == NULL)
+        if (root == NULL)
         {
             retry++;
             ESP_LOGE(__func__, "resp parse to json fail! retry times: %d", retry);
@@ -740,7 +646,7 @@ try_get_dev_info:
         else
         {
             bool success = cJSON_IsTrue(cJSON_GetObjectItem(root, "success"));
-            if(success)
+            if (success)
             {
                 cJSON *data = cJSON_GetObjectItem(root, "data");
                 char *product_key = (cJSON_GetObjectItem(data, "product_key") != NULL ? cJSON_GetObjectItem(data, "product_key")->valuestring : NULL);
@@ -754,7 +660,7 @@ try_get_dev_info:
                     vTaskDelay(pdMS_TO_TICKS(5000));
                     goto try_get_dev_info;
                 }
-                
+
                 memset(g_dev_mqtt.ProductKey, 0x00, sizeof(g_dev_mqtt.ProductKey));
                 memset(g_dev_mqtt.DeviceName, 0x00, sizeof(g_dev_mqtt.DeviceName));
                 memset(g_dev_mqtt.DeviceSecret, 0x00, sizeof(g_dev_mqtt.DeviceSecret));
@@ -805,6 +711,7 @@ void app_main(void)
 
     xTaskCreatePinnedToCore(button_task, "button_task", 1024 * 4, NULL, 10, NULL, 0);
     xTaskCreatePinnedToCore(joystick_task, "joystick_task", 1024 * 4, NULL, 5, NULL, 0);
+    xTaskCreatePinnedToCore(display_task, "display_task", 1024 * 8, NULL, 4, NULL, 1);
     while (1)
     {
         vTaskDelay(pdMS_TO_TICKS(1000));
