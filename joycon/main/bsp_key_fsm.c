@@ -34,6 +34,7 @@ typedef struct
 } key_config_t;
 
 key_config_t key_config[KEY_NUM] = {0};
+key_value_t key_value[KEY_NUM] = {0};
 
 static void get_key_level()
 {
@@ -350,7 +351,6 @@ void key_read_status()
 
 void button_task(void *arg)
 {
-    key_value_t key_value[KEY_NUM] = {0};
     key_init_t key_io[KEY_NUM] =
         {
             {GPIO_PULLUP_ENABLE, BUTTON_0, 0},

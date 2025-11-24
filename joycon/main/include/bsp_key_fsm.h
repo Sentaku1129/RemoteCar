@@ -39,6 +39,8 @@ typedef struct {
     bool key_fsm_finished;
 } key_value_t;
 
+extern key_value_t key_value[KEY_NUM];
+
 void key_init(key_init_t *key_io, key_value_t *key_value);
 void key_read_status();
 void button_task(void *arg);

@@ -9,6 +9,8 @@
 #include "bsp_display.h"
 #include "bsp_http.h"
 #include "bsp_config.h"
+#include "bsp_key_fsm.h"
+#include "bsp_joystick.h"
 
 static const char *TAG = "LCD_SPI";
 
@@ -17,8 +19,6 @@ static const char *TAG = "LCD_SPI";
 #define LCD_SPI_CLOCK 8000000 // 8MHz SPI 时钟（可根据需要调整 1-20MHz）
 
 static spi_device_handle_t spi_handle = NULL;
-
-char device_list[13][10] = {0};
 
 // ==================== LCD 复位 ====================
 void lcd_reset(void)
@@ -263,10 +263,30 @@ typedef struct disp_menu_s
 {
     const char *name;               // 菜单名
     const char *desc;               // 当前菜单描述
+    struct disp_menu_s *supmenus;   // 上级菜单列表
+    size_t supmenu_count;           // 上级菜单数量
     struct disp_menu_s *submenus;   // 子菜单列表
     size_t submenu_count;           // 子菜单数量
     esp_err_t (*action)(void *arg); // 菜单执行函数
+    void *arg;                      // 函数执行参数
 } disp_menu_t;
+
+typedef struct
+{
+    int idx;
+    char idxs[8];
+    char name[32];
+    char mac[13];
+} dev_list_t;
+
+#define MAX_DEVICE_LIST 10
+
+dev_list_t dev_list[MAX_DEVICE_LIST];
+
+extern disp_menu_t main_menu[];
+extern disp_menu_t settings_menu[];
+extern disp_menu_t check_menu[];
+disp_menu_t dev_list_menu[MAX_DEVICE_LIST];
 
 TaskHandle_t idle_disp_task_handle = NULL;
 
@@ -278,46 +298,7 @@ void idle_disp_task(void *arg)
     }
 }
 
-esp_err_t check_devices(void *arg)
-{
-    if (g_wifi_connected)
-    {
-        char *url = HTTPS_HOST "/check_devices";
-        char *resp = user_malloc(256, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-        memset(resp, 0x00, 256);
-        xTaskCreatePinnedToCore(idle_disp_task, "idle_disp_task", 1024 * 2, "CHECK DEVICES", 2, &idle_disp_task_handle, 1);
-        esp_err_t ret = http_post(url, NULL, resp, 255);
-        if (ret == ESP_OK)
-        {
-            cJSON *root = cJSON_Parse(resp);
-            user_free(__func__, resp);
-            if (cJSON_GetObjectItem(root, "success") && cJSON_IsTrue(cJSON_GetObjectItem(root, "success")))
-            {
-                for (int i = 0; i < cJSON_GetObjectItem(root, "device_len")->valueint; i++)
-                {
-                    cJSON *item = cJSON_GetArrayItem(cJSON_GetObjectItem(root, "data"), i);
-                    if (item && item->valuestring)
-                        sprintf(device_list[i], "%s", item->valuestring);
-                }
-                cJSON_Delete(root);
-                vTaskDelete(idle_disp_task_handle);
-                return ESP_OK;
-            }
-            cJSON_Delete(root);
-            vTaskDelete(idle_disp_task_handle);
-            return ESP_FAIL;
-        }
-        else
-        {
-            user_free(__func__, resp);
-            vTaskDelete(idle_disp_task_handle);
-            return ESP_FAIL;
-        }
-    }
-    return ESP_FAIL;
-}
-
-esp_err_t bind_device(void *device)
+esp_err_t bind_device(void *arg)
 {
     if (g_wifi_connected)
     {
@@ -329,7 +310,7 @@ esp_err_t bind_device(void *device)
 
         cJSON *root = cJSON_CreateObject();
         cJSON_AddStringToObject(root, "mac", g_dev_config.dev_mac);
-        cJSON_AddStringToObject(root, "car", (char *)device);
+        cJSON_AddStringToObject(root, "car", (char *)arg);
         char *body = cJSON_PrintUnformatted(root);
         cJSON_Delete(root);
         esp_err_t ret = http_post(url, body, resp, 255);
@@ -404,23 +385,81 @@ esp_err_t unbind_device(void *arg)
     return ESP_FAIL;
 }
 
-disp_menu_t bond_menu[] = {
-    {"", "", NULL, 1, NULL},
-};
+esp_err_t check_devices(void *arg)
+{
+    if (g_wifi_connected)
+    {
+        char *url = HTTPS_HOST "/check_devices";
+        char *resp = user_malloc(256, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        memset(resp, 0x00, 256);
+        xTaskCreatePinnedToCore(idle_disp_task, "idle_disp_task", 1024 * 2, "CHECK DEVICES", 2, &idle_disp_task_handle, 1);
+        esp_err_t ret = http_post(url, NULL, resp, 255);
+        if (ret == ESP_OK)
+        {
+            cJSON *root = cJSON_Parse(resp);
+            user_free(__func__, resp);
+            if (cJSON_GetObjectItem(root, "success") && cJSON_IsTrue(cJSON_GetObjectItem(root, "success")))
+            {
+                for (int i = 0; i < cJSON_GetObjectItem(root, "device_len")->valueint; i++)
+                {
+                    cJSON *item = cJSON_GetArrayItem(cJSON_GetObjectItem(root, "data"), i);
+                    if (item)
+                    {
+                        cJSON *idx = cJSON_GetObjectItem(item, "idx");
+                        cJSON *name = cJSON_GetObjectItem(item, "name");
+                        cJSON *mac = cJSON_GetObjectItem(item, "mac");
+
+                        dev_list[i].idx = idx->valueint;
+                        itoa(dev_list[i].idx, dev_list[i].idxs, 10);
+                        sprintf(dev_list[i].name, name->valuestring);
+                        sprintf(dev_list[i].mac, mac->valuestring);
+
+                        dev_list_menu[i].name = dev_list[i].mac;
+                        dev_list_menu[i].desc = dev_list[i].name;
+
+                        dev_list_menu[i].supmenus = check_menu;
+                        dev_list_menu[i].supmenu_count = 3;
+                        dev_list_menu[i].submenus = NULL;
+                        dev_list_menu[i].submenu_count = 0;
+
+                        dev_list_menu[i].action = bind_device;
+                        dev_list_menu[i].arg = dev_list[i].mac;
+                    }
+                }
+
+                check_menu[0].submenus = dev_list_menu;
+                check_menu[0].submenu_count = cJSON_GetObjectItem(root, "device_len")->valueint;
+                cJSON_Delete(root);
+                vTaskDelete(idle_disp_task_handle);
+                return ESP_OK;
+            }
+            cJSON_Delete(root);
+            vTaskDelete(idle_disp_task_handle);
+            return ESP_FAIL;
+        }
+        else
+        {
+            user_free(__func__, resp);
+            vTaskDelete(idle_disp_task_handle);
+            return ESP_FAIL;
+        }
+    }
+    return ESP_FAIL;
+}
 
 disp_menu_t check_menu[] = {
-    {"bond_disp", "bond display", NULL, 1, bind_device},
+    {"bond_disp", "bond display", settings_menu, 3, NULL, 0, NULL, NULL},
 };
 
 disp_menu_t settings_menu[] = {
-    {"check_disp", "check display", check_menu, 1, check_devices},
-    {"unbond_disp", "unbond display", NULL, 0, unbind_device},
-    {"reset", "reset device", NULL, 0, NULL},
+    {"check_disp", "check display", main_menu, 2, check_menu, 1, check_devices, NULL},
+    {"unbond_disp", "unbond display", main_menu, 2, NULL, 0, unbind_device, NULL},
+    {"reset", "reset device", main_menu, 2, NULL, 0, NULL, NULL},
 };
 
 disp_menu_t main_menu[] = {
-    {"default_disp", "default display", NULL, 0, NULL},
-    {"setting_disp", "setting display", settings_menu, 3, NULL},
+    {"default_disp", "default display", NULL, 0, NULL, 0, NULL, NULL},
+    {"setting_disp", "setting display", NULL, 0, settings_menu, 3, NULL, NULL},
 };
 
 void draw_dashboard_screen()
@@ -433,17 +472,17 @@ void draw_dashboard_screen()
 
 void draw_menu_screen(disp_menu_t *menu, int len, int sel)
 {
-    // TODO: 调用 LCD 绘图 API
-    // 遍历 menu[i].name 并打印
-    // 高亮 index == sel 的项
-    // printf("MENU: %s >\n", menu[sel].name);
+    for (int i = 0; i < menu->submenu_count; i++)
+    {
+    }
 }
 
 typedef struct
 {
     int type; // 0: 摇杆, 1: 按键
     int id;   // 按键ID
-    int val;  // 值
+    key_value_t key_val;
+    joystick_vatual_button_t joy_val;
 } input_event_t;
 
 QueueHandle_t input_queue;
@@ -452,7 +491,38 @@ void read_input_value_task()
 {
     while (1)
     {
-        vTaskDelay(pdMS_TO_TICKS(200));
+        input_event_t evt = {0};
+        joystick_vatual_button_t vitual_button = joystick_vitual_idle;
+
+        vitual_button = read_left_joystick_postion();
+        if (vitual_button == joystick_vitual_left || vitual_button == joystick_vitual_right)
+        {
+            evt.type = 0;
+            evt.id = 0;
+            evt.joy_val = vitual_button;
+            xQueueSend(input_queue, &evt, pdMS_TO_TICKS(50));
+        }
+
+        vitual_button = read_right_joystick_postion();
+        if (vitual_button == joystick_vitual_up || vitual_button == joystick_vitual_down)
+        {
+            evt.type = 0;
+            evt.id = 0;
+            evt.joy_val = vitual_button;
+            xQueueSend(input_queue, &evt, pdMS_TO_TICKS(50));
+        }
+
+        for (int i = 0; i < KEY_NUM; i++)
+        {
+            if (key_value[i].key_status != KEY_IDLE)
+            {
+                evt.type = 1;
+                evt.id = i;
+                evt.key_val = key_value[i];
+                xQueueSend(input_queue, &evt, pdMS_TO_TICKS(50));
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
 
@@ -460,14 +530,9 @@ void display_task(void *arg)
 {
     // 0: 仪表盘模式 1: 设置菜单模式
     int disp_mode = 0;
-    disp_menu_t *curr_menu = settings_menu;
-    int curr_menu_len = 3;
+    disp_menu_t *curr_menu = main_menu;
+    int curr_menu_len = 1;
     int cursor = 0;
-
-    disp_menu_t *menu_stack[5];
-    int len_stack[5];
-    int cursor_stack[5];
-    int stack_ptr = 0;
 
     input_event_t evt;
     while (1)
@@ -476,9 +541,134 @@ void display_task(void *arg)
         {
             if (disp_mode == 0)
             {
+                switch (evt.type)
+                {
+                case 0:
+                    break;
+                case 1:
+                {
+                    switch (evt.id)
+                    {
+                    case 0:
+                        break;
+                    case 1:
+                        break;
+                    case 2:
+                        break;
+                    case 3:
+                    {
+                        if (evt.key_val.key_status == KEY_LONG_PRESSED)
+                            if (evt.key_val.key_fsm_finished == true)
+                                disp_mode = 1;
+                    }
+                    break;
+
+                    default:
+                        break;
+                    }
+                }
+                break;
+
+                default:
+                    break;
+                }
             }
             else if (disp_mode == 1)
             {
+                switch (evt.type)
+                {
+                case 0:
+                {
+                    switch (evt.id)
+                    {
+                    case joystick_vitual_idle:
+                        break;
+                    case joystick_vitual_up:
+                    {
+                        cursor = (cursor - 1 + curr_menu_len) % curr_menu_len;
+                    }
+                    break;
+                    case joystick_vitual_down:
+                    {
+                        cursor = (cursor + 1 + curr_menu_len) % curr_menu_len;
+                    }
+                    break;
+                    case joystick_vitual_left:
+                        break;
+                    case joystick_vitual_right:
+                        break;
+
+                    default:
+                        break;
+                    }
+                }
+                break;
+                case 1:
+                {
+                    switch (evt.id)
+                    {
+                    case 0:
+                        break;
+                    case 1: // 确认(Action)
+                    {
+                        if (curr_menu[cursor].action != NULL)
+                        {
+                            if (curr_menu[cursor].action(curr_menu[cursor].arg) != ESP_OK)
+                            {
+                                ESP_LOGI(__func__, "menu: %s action false", curr_menu[cursor].desc);
+                                curr_menu[cursor].action(curr_menu[cursor].arg);
+                            }
+                            else
+                            {
+                                ESP_LOGI(__func__, "menu: %s action true", curr_menu[cursor].desc);
+                            }
+                        }
+
+                        if (curr_menu[cursor].submenus != NULL)
+                        {
+                            cursor = 0;
+                            curr_menu_len = curr_menu[cursor].submenu_count;
+                            curr_menu = curr_menu[cursor].submenus;
+                        }
+
+                        if (curr_menu[cursor].action == NULL && curr_menu[cursor].submenus == NULL)
+                        {
+                            disp_mode = 0;
+                            cursor = 0;
+                            curr_menu_len = 2;
+                            curr_menu = main_menu;
+                        }
+                    }
+                    break;
+                    case 2:
+                        break;
+                    case 3: // 取消(Back)
+                    {
+                        if (curr_menu->supmenus != NULL)
+                        {
+                            cursor = 0;
+                            curr_menu_len = curr_menu[cursor].supmenu_count;
+                            curr_menu = curr_menu[cursor].supmenus;
+                        }
+                        else // joycon defalut display
+                        {
+                            disp_mode = 0;
+                            cursor = 0;
+                            curr_menu_len = 2;
+                            curr_menu = main_menu;
+                        }
+                    }
+                    break;
+
+                    default:
+                        break;
+                    }
+                }
+                break;
+
+                default:
+                    break;
+                }
             }
         }
 

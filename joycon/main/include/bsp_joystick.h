@@ -42,5 +42,7 @@ typedef enum
 }joystick_vatual_button_t;
 
 void joystick_task(void *arg);
+joystick_vatual_button_t read_left_joystick_postion();
+joystick_vatual_button_t read_right_joystick_postion();
 
 #endif
