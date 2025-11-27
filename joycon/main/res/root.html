@@ -4,7 +4,7 @@
 <head>
     <meta http-equiv='Content-Type' content='text/html; charset=utf-8' />
     <meta charset="UTF-8">
-    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'>
     <title>WiFi配置</title>
 
     <style media="screen">
@@ -14,6 +14,7 @@
             padding: 0;
             margin: 0;
             box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
         }
 
         body {
@@ -22,10 +23,13 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px;
+            padding: 15px;
             position: relative;
+            font-family: 'Poppins', sans-serif;
+            overflow-x: hidden;
         }
 
+        /* 背景动画优化 */
         .background {
             width: 100%;
             height: 100%;
@@ -38,83 +42,63 @@
         }
 
         .background .shape {
-            height: 200px;
-            width: 200px;
+            height: 150px;
+            width: 150px;
             position: absolute;
             border-radius: 50%;
+            opacity: 0.8;
         }
 
         .shape:first-child {
             background: linear-gradient(#1845ad, #23a2f6);
-            left: calc(50% - 250px);
-            top: calc(50% - 300px);
+            left: -50px;
+            top: -50px;
         }
 
         .shape:last-child {
             background: linear-gradient(to right, #ff512f, #f09819);
-            right: calc(50% - 250px);
-            bottom: calc(50% - 300px);
+            right: -50px;
+            bottom: -50px;
         }
 
-        /* 响应式调整背景形状 */
+        /* 平板/桌面端背景调整 */
         @media (min-width: 768px) {
             .background .shape {
                 height: 250px;
                 width: 250px;
             }
-
             .shape:first-child {
-                left: calc(50% - 280px);
-                top: calc(50% - 320px);
+                left: calc(50% - 350px);
+                top: calc(50% - 300px);
             }
-
             .shape:last-child {
-                right: calc(50% - 280px);
-                bottom: calc(50% - 320px);
-            }
-        }
-
-        /* 小屏幕优化 */
-        @media (max-width: 480px) {
-            .background .shape {
-                height: 150px;
-                width: 150px;
-            }
-
-            .shape:first-child {
-                left: calc(50% - 200px);
-                top: calc(50% - 250px);
-            }
-
-            .shape:last-child {
-                right: calc(50% - 200px);
-                bottom: calc(50% - 250px);
+                right: calc(50% - 350px);
+                bottom: calc(50% - 300px);
             }
         }
 
         fieldset {
             width: 100%;
-            max-width: 400px;
-            min-height: 450px;
+            max-width: 420px;
             background-color: rgba(255, 255, 255, 0.13);
-            border-radius: 10px;
+            border-radius: 12px;
             backdrop-filter: blur(10px);
-            border: 2px solid rgba(255, 255, 255, 0.1);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             box-shadow: 0 0 40px rgba(8, 7, 16, 0.6);
             padding: 30px 20px;
             position: relative;
             z-index: 1;
+            transition: all 0.3s ease;
         }
 
-        /* 平板和桌面端样式 */
         @media (min-width: 768px) {
             fieldset {
-                padding: 50px 35px;
+                padding: 50px 40px;
             }
         }
 
         fieldset * {
-            font-family: 'Poppins', sans-serif;
             color: #ffffff;
             letter-spacing: 0.5px;
             outline: none;
@@ -123,299 +107,175 @@
 
         fieldset h3 {
             font-size: 24px;
-            font-weight: 500;
+            font-weight: 600;
             line-height: 1.4;
             text-align: center;
-            margin-bottom: 10px;
-        }
-
-        @media (min-width: 768px) {
-            fieldset h3 {
-                font-size: 32px;
-                line-height: 42px;
-            }
+            margin-bottom: 20px;
         }
 
         fieldset h4 {
             text-align: center;
-            font-size: 14px;
+            font-size: 15px;
             line-height: 1.6;
-        }
-
-        @media (min-width: 768px) {
-            fieldset h4 {
-                font-size: 16px;
-            }
         }
 
         label {
             display: block;
-            margin-top: 10px;
-            font-size: 14px;
+            margin-top: 15px;
+            font-size: 15px;
             font-weight: 500;
+            color: #e0e0e0;
         }
 
-        @media (min-width: 768px) {
-            label {
-                font-size: 16px;
-            }
-        }
-
-        input {
+        /* 输入框与下拉框样式统一 */
+        input, select, .custom-select {
             display: block;
-            height: 45px;
+            height: 48px; /* 增加高度以适应手指点击 */
             width: 100%;
             background-color: rgba(255, 255, 255, 0.07);
-            border-radius: 3px;
-            padding: 0px 10px;
-            margin-top: 5px;
-            font-size: 14px;
+            border-radius: 6px;
+            padding: 0 12px;
+            margin-top: 8px;
+            font-size: 16px; /* 防止iOS缩放 */
             font-weight: 300;
+            transition: background-color 0.3s, border 0.3s;
+            border: 1px solid transparent;
         }
 
-        @media (min-width: 768px) {
-            input {
-                height: 50px;
-            }
+        input:focus, select:focus {
+            background-color: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.3);
         }
 
         input.error {
-            border: 2px solid #ff6b6b;
+            border: 1px solid #ff6b6b;
             background-color: rgba(255, 107, 107, 0.1);
         }
 
         ::placeholder {
-            color: #e5e5e5;
+            color: #c4c4c4;
         }
 
         button {
-            margin-top: 25px;
+            margin-top: 30px;
             width: 100%;
             background-image: linear-gradient(to right, #acb6e5, #86fde8);
             color: #080710;
-            padding: 12px 0;
-            font-size: 16px;
+            padding: 14px 0;
+            font-size: 17px;
             font-weight: 600;
-            border-radius: 5px;
+            border-radius: 6px;
             cursor: pointer;
-            transition: transform 0.2s;
-        }
-
-        @media (min-width: 768px) {
-            button {
-                margin-top: 35px;
-                padding: 15px 0;
-                font-size: 18px;
-            }
+            transition: transform 0.1s, opacity 0.2s;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         button:active {
             transform: scale(0.98);
+            opacity: 0.9;
         }
 
+        /* 扫描WiFi部分的布局 */
         .search_wifi {
             display: flex;
-            align-items: center;
+            align-items: flex-end;
             justify-content: space-between;
             width: 100%;
             gap: 10px;
+            margin-top: 5px;
+        }
+
+        .search_wifi label {
+            margin-bottom: 5px; /* 对齐 */
+            margin-top: 0;
         }
 
         #networks {
-            margin-top: 0px;
+            margin-top: 0;
             width: auto;
-            min-width: 80px;
-            background-color: rgba(255, 255, 255, 0);
-            color: #080710;
-            padding: 5px 10px;
+            min-width: 90px;
+            height: 36px;
+            padding: 0 15px;
             font-size: 14px;
-            font-weight: 600;
-            border-radius: 5px;
-            cursor: pointer;
             background-image: none;
-            white-space: nowrap;
+            background-color: rgba(255, 255, 255, 0.15);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            margin-bottom: 2px; /* 微调对齐 */
         }
-
-        @media (min-width: 768px) {
-            #networks {
-                font-size: 16px;
-            }
-        }
-
-        #submit {
-            margin-top: 25px;
-            width: 100%;
-            background-image: linear-gradient(to right, #acb6e5, #86fde8);
-            color: #080710;
-            padding: 12px 0;
-            font-size: 16px;
-            font-weight: 600;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-
-        @media (min-width: 768px) {
-            #submit {
-                margin-top: 35px;
-                padding: 15px 0;
-                font-size: 18px;
-            }
+        
+        #networks:active {
+            background-color: rgba(255, 255, 255, 0.25);
         }
 
         space {
             display: block;
-            height: 15px;
+            height: 10px;
         }
 
-        @media (min-width: 768px) {
-            space {
-                height: 20px;
-            }
+        /* 自定义下拉框容器 */
+        #dropdown {
+            position: relative;
+            margin-top: 8px;
         }
-
-        select {
-            display: block;
-            height: 45px;
-            width: 100%;
-            background-color: rgba(255, 255, 255, 0.00);
-            border-radius: 3px;
-            padding: 0px 10px;
-            margin-top: 5px;
-            font-size: 14px;
-            font-weight: 300;
+        
+        #dropdown select {
+            margin-top: 0;
             appearance: none;
-        }
-
-        @media (min-width: 768px) {
-            select {
-                height: 50px;
-            }
-        }
-
-        select option {
-            color: black;
-            border-radius: 3px;
-            background-color: rgba(255, 255, 255, 0.07);
+            -webkit-appearance: none;
         }
 
         #arrow {
-            color: #888;
+            color: #fff;
             position: absolute;
-            right: 8px;
+            right: 12px;
             top: 50%;
             transform: translateY(-50%);
+            pointer-events: none;
+            font-size: 12px;
         }
 
-        #dropdown {
-            position: relative;
-            height: 45px;
-            width: 100%;
-            padding: 0px 10px;
-            margin-top: 5px;
-            font-size: 14px;
-            font-weight: 300;
-            border-radius: 3px;
-            background-color: rgba(255, 255, 255, 0.07);
+        select option {
+            background-color: #2d2d2d;
+            color: #fff;
+            padding: 10px;
         }
 
-        @media (min-width: 768px) {
-            #dropdown {
-                height: 50px;
-            }
-        }
-
+        /* 状态提示 */
         #st {
             color: #ff6b6b;
-            font-size: 12px;
+            font-size: 14px;
             text-align: center;
-            margin-top: 10px;
-            min-height: 20px;
-        }
-
-        @media (min-width: 768px) {
-            #st {
-                font-size: 14px;
-            }
+            margin-top: 15px;
+            min-height: 24px;
+            font-weight: 500;
         }
 
         .error-hint {
             color: #ff6b6b;
-            font-size: 11px;
-            margin-top: 3px;
+            font-size: 13px;
+            margin-top: 5px;
+            display: none;
+            padding-left: 2px;
+        }
+
+        #dropdown, #f2, #f3, #bk2 {
             display: none;
         }
 
-        @media (min-width: 768px) {
-            .error-hint {
-                font-size: 12px;
-            }
-        }
-
-        #dropdown,
-        #f2,
-        #f3,
-        #bk2 {
-            display: none
-        }
-
-        /* 小屏幕优化 */
-        @media (max-width: 374px) {
+        /* 针对超小屏幕的额外优化 */
+        @media (max-width: 360px) {
             fieldset {
                 padding: 20px 15px;
             }
-
-            fieldset h3 {
+            h3 {
                 font-size: 20px;
             }
-
-            button {
-                font-size: 14px;
-                padding: 10px 0;
-            }
-        }
-
-        /* 横屏优化 */
-        @media (max-height: 600px) and (orientation: landscape) {
-            body {
-                padding: 10px;
-            }
-
-            fieldset {
-                min-height: auto;
-                padding: 20px;
-            }
-
-            fieldset h3 {
-                font-size: 20px;
-                margin-bottom: 5px;
-            }
-
             label {
-                margin-top: 5px;
-            }
-
-            space {
-                height: 10px;
-            }
-
-            button {
-                margin-top: 15px;
-                padding: 10px 0;
-            }
-
-            .background .shape {
-                height: 120px;
-                width: 120px;
-            }
-
-            .shape:first-child {
-                left: calc(50% - 180px);
-                top: calc(50% - 200px);
-            }
-
-            .shape:last-child {
-                right: calc(50% - 180px);
-                bottom: calc(50% - 200px);
+                font-size: 14px;
             }
         }
     </style>
@@ -430,40 +290,56 @@
     <fieldset>
         <div id="f1">
             <h3>设备WiFi配置</h3>
+            
             <div class="search_wifi">
                 <label for="ssid">WiFi名称</label>
-                <button id="networks" type="button"></button>
+                <button id="networks" type="button">搜索</button>
             </div>
 
-            <input type="text" id="ssid" placeholder="请输入WiFi名称" required>
+            <input type="text" id="ssid" placeholder="请输入WiFi名称" required autocapitalize="off" autocorrect="off">
+            
             <div id="dropdown">
                 <span id="arrow">&#x25bc;</span>
-                <select id="aplist" name="aplist" class="input"></select>
+                <select id="aplist" name="aplist"></select>
             </div>
+            
             <space></space>
 
             <label for="pswd">WiFi密码</label>
             <input type="password" id="pswd" placeholder="请输入WiFi密码" required>
             
             <space></space>
+            
             <label for="carname">小车名</label>
-            <input type="text" id="carname" placeholder="只能使用字母和符号，最多15位" maxlength="15" required>
-            <div class="error-hint" id="carname-error">只能包含字母和符号，不能包含中文或数字</div>
+            <input type="text" id="carname" placeholder="字母/符号，最多15位" maxlength="15" required autocapitalize="off">
+            <div class="error-hint" id="carname-error">只能包含字母和符号</div>
 
             <h4 id='st'></h4>
-            <button id="submit">请连接WiFi</button>
+            <button id="submit">连接 WiFi</button>
         </div>
+
         <div id="f2">
             <h3>配置成功!</h3>
             <div id="i">
-                <h4>WIFI已成功连接！<br /><br />注意稍后指示灯是否变为绿色常亮</h4>
+                <h4>WiFi已成功连接！<br /><br />请观察设备指示灯状态</h4>
             </div>
         </div>
+
         <div id="f3">
             <h3>连接中...</h3>
+            <div style="text-align: center; margin: 20px 0;">
+                <!-- 简单的加载动画 -->
+                <div style="display: inline-block; width: 30px; height: 30px; border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite;"></div>
+            </div>
             <button id="bk2">返回配置页面</button>
         </div>
     </fieldset>
+    
+    <style>
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
 
     <script>
         var $ = function (selector) {
@@ -498,56 +374,29 @@
             show('#f3', f)
         }
         
-        // 校验小车名：只允许字母和符号，不允许中文和数字
+        // 校验逻辑保持不变
         function validateCarname(name) {
             if (!name || name.length === 0) {
-                return {
-                    valid: false,
-                    message: '小车名不能为空'
-                };
+                return { valid: false, message: '小车名不能为空' };
             }
-            
             if (name.length > 15) {
-                return {
-                    valid: false,
-                    message: '小车名长度不能超过15位'
-                };
+                return { valid: false, message: '小车名长度不能超过15位' };
             }
-            
-            // 检测中文字符
             var chineseRegex = /[\u4e00-\u9fa5]/;
             if (chineseRegex.test(name)) {
-                return {
-                    valid: false,
-                    message: '小车名不能包含中文字符'
-                };
+                return { valid: false, message: '小车名不能包含中文字符' };
             }
-            
-            // 检测数字
             var numberRegex = /[0-9]/;
             if (numberRegex.test(name)) {
-                return {
-                    valid: false,
-                    message: '小车名不能包含数字'
-                };
+                return { valid: false, message: '小车名不能包含数字' };
             }
-            
-            // 只允许字母和符号（ASCII可打印字符中除去数字的部分）
             var validRegex = /^[a-zA-Z!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~\s]+$/;
             if (!validRegex.test(name)) {
-                return {
-                    valid: false,
-                    message: '小车名只能包含字母和符号'
-                };
+                return { valid: false, message: '小车名只能包含字母和符号' };
             }
-            
-            return {
-                valid: true,
-                message: ''
-            };
+            return { valid: true, message: '' };
         }
         
-        // 实时校验小车名输入
         $('#carname').addEventListener('input', function() {
             var carnameInput = $('#carname');
             var errorHint = $('#carname-error');
@@ -567,12 +416,10 @@
             clearTimeout(rs);
             rs = to(refr, 3);
             if (s != 200) {
-                $('#st').innerText = 'Awaiting Status (' + s + ')'
+                $('#st').innerText = '等待状态 (' + s + ')'
             }
             else {
-                if (typeof d === 'string') {
-                    d = JSON.parse(d)
-                }
+                if (typeof d === 'string') d = JSON.parse(d);
                 if (d == 3) {
                     st = 'Wi-Fi 连接成功!';
                     cur('#f2');
@@ -584,7 +431,6 @@
                 }
                 else if (d == 6) {
                     st = 'WIFI不可用或密码错误!';
-
                     clearTimeout(rs);
                     cur('#f1')
                 }
@@ -597,13 +443,11 @@
             pswd = $('#pswd').value;
             carname = $('#carname').value;
             
-            // 校验 WiFi 名称
             if (ssid == '') {
                 alert('请输入WiFi名称');
                 return
             }
             
-            // 校验小车名
             var validation = validateCarname(carname);
             if (!validation.valid) {
                 alert(validation.message);
@@ -621,12 +465,8 @@
         
         function fetch(url, method, callback, time_out) {
             var xhr = new XMLHttpRequest();
-            xhr.onloadend = function () {
-                callback(xhr.status, xhr.responseText)
-            };
-            xhr.ontimeout = function () {
-                callback(-1, null)
-            };
+            xhr.onloadend = function () { callback(xhr.status, xhr.responseText) };
+            xhr.ontimeout = function () { callback(-1, null) };
             xhr.open(method, url, true);
             xhr.setRequestHeader('Accept', 'application/json');
             xhr.timeout = (time_out || 10) * 1000;
@@ -635,12 +475,8 @@
         
         function fetch_config(url, method, callback, time_out) {
             var xhr = new XMLHttpRequest();
-            xhr.onloadend = function () {
-                callback(xhr.status, xhr.responseText)
-            };
-            xhr.ontimeout = function () {
-                callback(-1, null)
-            };
+            xhr.onloadend = function () { callback(xhr.status, xhr.responseText) };
+            xhr.ontimeout = function () { callback(-1, null) };
             xhr.open(method, url, true);
             xhr.setRequestHeader('Accept', 'application/json');
             xhr.timeout = (time_out || 10) * 1000;
@@ -655,27 +491,27 @@
             if (s === 200 && json != null) {
                 if (typeof json === 'string' && json.length > 0) {
                     list = JSON.parse(json)
-                }
-                else if (typeof json === 'object') {
+                } else if (typeof json === 'object') {
                     list = json
-                } list.sort(function (a, b) {
-                    return b.rssi - a.rssi
-                });
-                var ops = '<option>选择WIFI...</option>';
+                }
+                list.sort(function (a, b) { return b.rssi - a.rssi });
+                var ops = '<option value="" disabled selected>选择WIFI...</option>';
                 for (var i = 0; i < list.length; ++i) {
-                    ops += '<option>' + list[i].ssid + '</option>'
+                    ops += '<option value="' + list[i].ssid + '">' + list[i].ssid + '</option>'
                 };
-                ap.innerHTML = ops; ab.disabled = false; togAp(null, true); ab.onclick = togAp
-            }
-            else {
-                ab.innerText = 'WIFI未找到 (' + s + ')';
+                ap.innerHTML = ops; 
+                ab.disabled = false; 
+                togAp(null, true); 
+                ab.onclick = togAp
+            } else {
+                ab.innerText = '重试 (' + s + ')';
                 ab.disabled = false;
             }
         }
         
         function togAp(ev, force) {
-            if (!force || ap.style.display == 'block') {
-                hide('#dropdown'); show('#ssid'); ab.innerText = '扫描';
+            if (!force || ap.parentNode.style.display == 'block') {
+                hide('#dropdown'); show('#ssid'); ab.innerText = '扫描WiFi';
                 ab.onclick = refrAp
             } else {
                 show('#dropdown'); hide('#ssid'); ab.innerText = '手动输入'
@@ -685,23 +521,20 @@
         function refrAp() {
             ab.innerText = '扫描中...';
             ab.disabled = true;
-            ap.innerHTML = '<option disabled>扫描中...</option>';
+            ap.innerHTML = '<option>扫描中...</option>';
             if (!stopAll)
                 fetch('/scanap', 'GET', gotAp, 10)
         }
         
         window.onload = function () {
-            ab.innerText = '搜索';
+            ab.innerText = '扫描WiFi';
             ab.onclick = refrAp;
             $('#aplist').onchange = function () {
-                $('#ssid').value = $('#aplist').value
+                $('#ssid').value = this.value
             };
             $('#submit').onclick = submit;
-            $('#bk2').onclick = function () {
-                cur('#f1')
-            }
+            $('#bk2').onclick = function () { cur('#f1') }
         }
     </script>
 </body>
-
 </html>

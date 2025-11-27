@@ -57,6 +57,7 @@ typedef struct
 #define SOFT_AP_PSWD        "88888888"
 
 extern bool g_wifi_connected;
+extern int g_wifi_rssi;
 
 extern dev_config_t g_dev_config;
 extern bind_car_dev_t g_bind_car_dev;

@@ -41,6 +41,10 @@ typedef enum
     joystick_vitual_right
 }joystick_vatual_button_t;
 
+extern joystick_normalized_t joycon_value_L;
+extern joystick_normalized_t joycon_value_R;
+extern int g_battery_level;
+
 void joystick_task(void *arg);
 joystick_vatual_button_t read_left_joystick_postion();
 joystick_vatual_button_t read_right_joystick_postion();

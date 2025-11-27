@@ -14,6 +14,10 @@ static adc_cali_handle_t left_x_cali_handle = NULL;
 static adc_cali_handle_t left_y_cali_handle = NULL;
 static adc_cali_handle_t right_x_cali_handle = NULL;
 static adc_cali_handle_t right_y_cali_handle = NULL;
+joystick_normalized_t joycon_value_L = {0};
+joystick_normalized_t joycon_value_R = {0};
+
+int g_battery_level;   // 0-100
 
 static bool adc_calibration_init(adc_unit_t unit, adc_channel_t channel, adc_atten_t atten, adc_cali_handle_t *out_handle)
 {
@@ -197,6 +201,8 @@ void joystick_task(void *arg)
     {
         if (joystick_read_left_normalized(&left_norm) == ESP_OK && joystick_read_right_normalized(&right_norm) == ESP_OK)
         {
+            joycon_value_L = left_norm;
+            joycon_value_R = right_norm;
             if (fabs(left_norm.x) > vitual_button_norm_reference_value || fabs(left_norm.y) > vitual_button_norm_reference_value)
             {
                 float value = fabs(left_norm.x) >= fabs(left_norm.y) ? left_norm.x : left_norm.y;

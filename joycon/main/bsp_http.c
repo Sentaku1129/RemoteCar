@@ -27,19 +27,23 @@ esp_err_t http_event_handler(esp_http_client_event_t *evt)
         file_stream_t *user_data = (file_stream_t *)evt->user_data;
         if (!esp_http_client_is_chunked_response(evt->client))
         {
-            if (user_data->length == 0)
-                ESP_LOGI(__func__, "HTTP_EVENT_ON_DATA");
-        }
-        if (user_data->length + evt->data_len >= user_data->maxlen)
-        {
-            ESP_LOGE(__func__, "data buffer overlow!");
-            user_data->length = -1;
-            esp_http_client_close(evt->client);
-        }
-        else
-        {
-            memcpy(user_data->data + user_data->length, evt->data, evt->data_len);
-            user_data->length += evt->data_len;
+            if (user_data->data)
+            {
+                if (user_data->length == 0)
+                    ESP_LOGI(__func__, "HTTP_EVENT_ON_DATA");
+
+                if (user_data->length + evt->data_len >= user_data->maxlen)
+                {
+                    ESP_LOGE(__func__, "data buffer overlow!");
+                    user_data->length = -1;
+                    esp_http_client_close(evt->client);
+                }
+                else
+                {
+                    memcpy(user_data->data + user_data->length, evt->data, evt->data_len);
+                    user_data->length += evt->data_len;
+                }
+            }
         }
     }
     break;
@@ -57,7 +61,7 @@ esp_err_t http_event_handler(esp_http_client_event_t *evt)
 esp_err_t http_post(const char *url, char *body, char *resp, uint32_t len)
 {
     file_stream_t http_data = {
-        .data = (resp == NULL ? (uint8_t *)resp : NULL),
+        .data = (resp != NULL ? (uint8_t *)resp : NULL),
         .length = 0,
         .maxlen = len,
     };
@@ -81,7 +85,7 @@ esp_err_t http_post(const char *url, char *body, char *resp, uint32_t len)
     esp_err_t err = esp_http_client_perform(client);
     if (err == ESP_OK)
     {
-        ESP_LOGI(__func__, "http post status = %d, coentent length = %lld",
+        ESP_LOGI(__func__, "http post status = %d, content length = %lld",
                  esp_http_client_get_status_code(client),
                  esp_http_client_get_content_length(client));
 

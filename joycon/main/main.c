@@ -16,6 +16,7 @@
 #include "esp_http_server.h"
 #include "mqtt_client.h"
 #include "esp_http_client.h"
+#include "esp_timer.h"
 #include "cJSON.h"
 
 #include "sign_api.h"
@@ -31,10 +32,12 @@
 bool g_beep_status = true;
 bool g_wifi_connected = false;
 int g_wifi_con_status = 0;
+int g_wifi_rssi = 0;
 dev_config_t g_dev_config = {0};
 bind_car_dev_t g_bind_car_dev = {.car = {0}, .is_bind = false};
 dev_mqtt_t g_dev_mqtt = {0};
 esp_mqtt_client_handle_t g_mqtt_client = NULL;
+esp_timer_handle_t g_reset_timer = NULL;
 
 QueueHandle_t beep_queue = NULL;
 
@@ -92,25 +95,60 @@ static esp_err_t check_sys_config(void)
     size_t require_size = 0;
 
     // ssid
-    ret = nvs_get_str(nvs_handle, NVS_SYS_WIFI_SSID, g_dev_config.dev_ssid, &require_size);
-    if (ret != ESP_OK)
+    if(nvs_get_str(nvs_handle, NVS_SYS_WIFI_SSID, NULL, &require_size) != ESP_OK)
     {
-        ESP_LOGI(__func__, "read nvs fail");
+        ESP_LOGI(__func__, "read ssid nvs fail");
         goto check_sys_finally;
     }
-    if (require_size == 0)
+    else
     {
-        ESP_LOGI(__func__, "no wifi ssid");
-        ret = ESP_FAIL;
-        goto check_sys_finally;
+        if(require_size == 0)
+        {
+            ESP_LOGI(__func__, "no wifi ssid");
+            ret = ESP_FAIL;
+        }
+        else
+        {
+            nvs_get_str(nvs_handle, NVS_SYS_WIFI_SSID, g_dev_config.dev_ssid, &require_size);
+        }
     }
 
     // pswd
-    ret = nvs_get_str(nvs_handle, NVS_SYS_WIFI_SSID, g_dev_config.dev_ssid, &require_size);
-    if (ret != ESP_OK)
+    if (nvs_get_str(nvs_handle, NVS_SYS_WIFI_PSWD, NULL, &require_size) != ESP_OK)
     {
-        ESP_LOGI(__func__, "read nvs fail");
+        ESP_LOGI(__func__, "read pswd nvs fail");
         goto check_sys_finally;
+    }
+    else
+    {
+        if(require_size == 0)
+        {
+            ESP_LOGI(__func__, "no wifi pswd");
+            ret = ESP_FAIL;
+        }
+        else
+        {
+            nvs_get_str(nvs_handle, NVS_SYS_WIFI_PSWD, g_dev_config.dev_pswd, &require_size);
+        }        
+    }
+
+    // name
+    if (nvs_get_str(nvs_handle, NVS_SYS_DEV_NAME, NULL, &require_size) != ESP_OK)
+    {
+        ESP_LOGI(__func__, "read name nvs fail");
+        goto check_sys_finally;
+    }
+    else
+    {
+        if(require_size == 0)
+        {
+            ESP_LOGI(__func__, "no dev name");
+            ret = ESP_FAIL;
+        }
+        else
+        {
+            nvs_get_str(nvs_handle, NVS_SYS_DEV_NAME, g_dev_config.dev_name, &require_size);
+        }        
     }
 
 check_sys_finally:
@@ -169,7 +207,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
     }
     else if (event_id == WIFI_EVENT_STA_DISCONNECTED)
     {
-        g_wifi_con_status = WIFI_EVENT_STA_DISCONNECTED;
+        g_wifi_con_status = 6;
         g_wifi_connected = false;
         ESP_LOGI(__func__, "Wi-Fi disconnected, trying to reconnect...");
         esp_wifi_connect();
@@ -185,17 +223,18 @@ static void on_got_ip(void *arg, esp_event_base_t event_base, int32_t event_id, 
 
     esp_wifi_get_mode(&md);
 
-    g_wifi_con_status = IP_EVENT_STA_GOT_IP;
+    g_wifi_con_status = 3;
     g_wifi_connected = true;
     if (md == WIFI_MODE_APSTA)
     {
         save_wifi_config();
+        esp_timer_start_once(g_reset_timer, 5000000);
     }
 }
 
 static void web_connect_wifi(void)
 {
-    g_wifi_con_status = 0;
+    g_wifi_con_status = 7;
 
     esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &on_got_ip, NULL);
     esp_wifi_set_storage(WIFI_STORAGE_RAM);
@@ -233,6 +272,7 @@ static void dev_connect_wifi(void)
 
     sprintf((char *)wifi_config.sta.ssid, "%s", g_dev_config.dev_ssid);
     sprintf((char *)wifi_config.sta.password, "%s", g_dev_config.dev_pswd);
+    ESP_LOGI(__func__, "wifi cfg: ssid: %s, pswd: %s", g_dev_config.dev_ssid, g_dev_config.dev_pswd);
 
     esp_wifi_set_mode(WIFI_MODE_STA);
     esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
@@ -241,8 +281,8 @@ static void dev_connect_wifi(void)
 
     uint8_t eth_mac[6] = {0};
     esp_wifi_get_mac(WIFI_IF_STA, eth_mac);
-    ;
     sprintf(g_dev_config.dev_mac, "%02X%02X%02X%02X%02X%02X", eth_mac[0], eth_mac[1], eth_mac[2], eth_mac[3], eth_mac[4], eth_mac[5]);
+    ESP_LOGI(__func__, "sta mac: %s", g_dev_config.dev_mac);
 }
 
 static void start_softap(void)
@@ -581,12 +621,15 @@ static void start_mqtt_app(void)
 
     IOT_Sign_MQTT(IOTX_CLOUD_REGION_SHANGHAI, meta_info, sign_mqtt);
 
-    esp_mqtt_client_config_t *mqtt_cfg = user_malloc(sizeof(esp_http_client_config_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    memset(mqtt_cfg, 0x00, sizeof(esp_mqtt_client_config_t));
+    ESP_LOGI(__func__, "pswd: %s %s %s %s", sign_mqtt->password, sign_mqtt->clientid, sign_mqtt->username, sign_mqtt->clientid);
+
+    esp_mqtt_client_config_t *mqtt_cfg = user_malloc(sizeof(esp_mqtt_client_config_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    memset(mqtt_cfg, 0, sizeof(esp_mqtt_client_config_t));
 
     mqtt_cfg->broker.address.hostname = sign_mqtt->hostname;
     mqtt_cfg->broker.address.port = sign_mqtt->port;
     mqtt_cfg->broker.address.transport = MQTT_TRANSPORT_OVER_TCP;
+    mqtt_cfg->network.disable_auto_reconnect = false;
     mqtt_cfg->credentials.username = sign_mqtt->username;
     mqtt_cfg->credentials.client_id = sign_mqtt->clientid;
     mqtt_cfg->credentials.authentication.password = sign_mqtt->password;
@@ -600,6 +643,8 @@ static void start_mqtt_app(void)
     // 事件处理函数
     esp_mqtt_client_register_event(g_mqtt_client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
     esp_mqtt_client_start(g_mqtt_client);
+
+    ESP_LOGI(__func__, "line = %d", __LINE__);
 }
 
 static void get_device_info()
@@ -607,8 +652,9 @@ static void get_device_info()
     char *resp = user_malloc(256, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     const char *url = HTTPS_HOST "/register_device";
     cJSON *root = cJSON_CreateObject();
-    cJSON_AddNumberToObject(root, "type", 2);
+    cJSON_AddNumberToObject(root, "type", 1);
     cJSON_AddStringToObject(root, "mac", g_dev_config.dev_mac);
+    cJSON_AddStringToObject(root, "name", g_dev_config.dev_name);
     char *body = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
 
@@ -635,6 +681,7 @@ try_get_dev_info:
     }
     else
     {
+        ESP_LOGI(__func__, "resp: %s", resp);
         root = cJSON_Parse(resp);
         if (root == NULL)
         {
@@ -677,6 +724,14 @@ try_get_dev_info:
     user_free(__func__, body);
 }
 
+void reset_timer_callback(void *arg)
+{
+    esp_mqtt_client_stop(g_mqtt_client);
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    ESP_LOGI(__func__, "dev will restart");
+    esp_restart();
+}
+
 void app_main(void)
 {
     esp_err_t ret = nvs_flash_init();
@@ -690,13 +745,18 @@ void app_main(void)
     esp_netif_init();
     esp_event_loop_create_default();
 
+    esp_timer_create_args_t esp_timer_args = {
+        .callback = reset_timer_callback,
+    };
+    esp_timer_create(&esp_timer_args, &g_reset_timer);
+
     ret = check_sys_config();
     if (ret == ESP_OK)
     {
         dev_connect_wifi();
-        while (g_wifi_connected)
+        while (!g_wifi_connected)
         {
-            vTaskDelay(pdMS_TO_TICKS(100));
+            vTaskDelay(pdMS_TO_TICKS(1000));
         }
         get_device_info();
         start_mqtt_app();
@@ -711,11 +771,12 @@ void app_main(void)
 
     xTaskCreatePinnedToCore(button_task, "button_task", 1024 * 4, NULL, 10, NULL, 0);
     xTaskCreatePinnedToCore(joystick_task, "joystick_task", 1024 * 4, NULL, 5, NULL, 0);
-    xTaskCreatePinnedToCore(display_task, "display_task", 1024 * 8, NULL, 4, NULL, 1);
+    // xTaskCreatePinnedToCore(display_task, "display_task", 1024 * 8, NULL, 4, NULL, 1);
     while (1)
     {
+        esp_wifi_sta_get_rssi(&g_wifi_rssi);
         vTaskDelay(pdMS_TO_TICKS(1000));
-        ESP_LOGI(__func__, "hello world");
+        ESP_LOGI(__func__, "hello world, rssi = %d", g_wifi_rssi);
     }
 
     printf("Hello world!\n");
