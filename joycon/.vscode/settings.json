@@ -1,0 +1,51 @@
+{
+  "C_Cpp.intelliSenseEngine": "default",
+  "idf.espIdfPathWin": "d:\\code\\espressif\\v541\\v5.4.1\\esp-idf",
+  "idf.pythonInstallPath": "d:\\code\\espressif\\v541\\esp_tools\\tools\\idf-python\\3.11.2\\python.exe",
+  "idf.openOcdConfigs": [
+    "interface/ftdi/esp32_devkitj_v1.cfg",
+    "target/esp32s3.cfg"
+  ],
+  "idf.toolsPathWin": "d:\\code\\espressif\\v541\\esp_tools",
+  "idf.customExtraVars": {
+    "IDF_TARGET": "esp32"
+  },
+  "clangd.path": "d:\\code\\espressif\\v541\\esp_tools\\tools\\esp-clang\\esp-18.1.2_20240912\\esp-clang\\bin\\clangd.exe",
+  "clangd.arguments": [
+    "--background-index",
+    "--query-driver=d:\\code\\espressif\\v541\\esp_tools\\tools\\xtensa-esp-elf\\esp-14.2.0_20241119\\xtensa-esp-elf\\bin\\xtensa-esp32-elf-gcc.exe",
+    "--compile-commands-dir=d:\\code\\ishare\\esp\\joycon\\build"
+  ],
+  "files.associations": {
+    "stdio.h": "c",
+    "bsp_key_fsm.h": "c",
+    "gpio.h": "c",
+    "bsp_display.h": "c",
+    "adc_cali.h": "c",
+    "freertos.h": "c",
+    "adc_cali_scheme.h": "c",
+    "adc_oneshot.h": "c",
+    "adc_types.h": "c",
+    "clk_tree_defs.h": "c",
+    "nvs.h": "c",
+    "ratio": "c",
+    "mqtt_client.h": "c",
+    "esp_http_client.h": "c",
+    "bsp_http.h": "c",
+    "bsp_config.h": "c",
+    "array": "c",
+    "string": "c",
+    "string_view": "c",
+    "span": "c",
+    "esp_timer.h": "c",
+    "queue.h": "c",
+    "task.h": "c",
+    "bitset": "c",
+    "format": "c",
+    "initializer_list": "c",
+    "regex": "c",
+    "bsp_dns.h": "c"
+  },
+  "idf.portWin": "COM12",
+  "idf.flashType": "UART"
+}

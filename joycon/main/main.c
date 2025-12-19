@@ -40,6 +40,7 @@ esp_mqtt_client_handle_t g_mqtt_client = NULL;
 esp_timer_handle_t g_reset_timer = NULL;
 
 QueueHandle_t beep_queue = NULL;
+QueueHandle_t publish_queue = NULL;
 
 void beep_task(void *arg)
 {
@@ -643,8 +644,6 @@ static void start_mqtt_app(void)
     // 事件处理函数
     esp_mqtt_client_register_event(g_mqtt_client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
     esp_mqtt_client_start(g_mqtt_client);
-
-    ESP_LOGI(__func__, "line = %d", __LINE__);
 }
 
 static void get_device_info()
@@ -696,9 +695,9 @@ try_get_dev_info:
             if (success)
             {
                 cJSON *data = cJSON_GetObjectItem(root, "data");
-                char *product_key = (cJSON_GetObjectItem(data, "product_key") != NULL ? cJSON_GetObjectItem(data, "product_key")->valuestring : NULL);
-                char *device_name = (cJSON_GetObjectItem(data, "device_name") != NULL ? cJSON_GetObjectItem(data, "device_name")->valuestring : NULL);
-                char *device_secret = (cJSON_GetObjectItem(data, "device_secret") != NULL ? cJSON_GetObjectItem(data, "device_secret")->valuestring : NULL);
+                char *product_key = (cJSON_GetObjectItem(data, "ProductKey") != NULL ? cJSON_GetObjectItem(data, "ProductKey")->valuestring : NULL);
+                char *device_name = (cJSON_GetObjectItem(data, "DeviceName") != NULL ? cJSON_GetObjectItem(data, "DeviceName")->valuestring : NULL);
+                char *device_secret = (cJSON_GetObjectItem(data, "DeviceSecret ") != NULL ? cJSON_GetObjectItem(data, "DeviceSecret ")->valuestring : NULL);
                 if (product_key == NULL || device_name == NULL || device_secret == NULL)
                 {
                     retry++;
@@ -730,6 +729,29 @@ void reset_timer_callback(void *arg)
     vTaskDelay(pdMS_TO_TICKS(1000));
     ESP_LOGI(__func__, "dev will restart");
     esp_restart();
+}
+
+void mqtt_publish_task(void *arg)
+{
+    char *publish_data = NULL; // 用来接收队列弹出的指针
+
+    publish_queue = xQueueCreate(10, sizeof(char *));
+
+    while (1)
+    {
+        if (xQueueReceive(publish_queue, &publish_data, portMAX_DELAY) == pdTRUE)
+        {
+            if (publish_data != NULL)
+            {
+                char joycon_topic[128] = {0};
+                sprintf(joycon_topic, "/%s/%s/user/joycon", g_dev_mqtt.ProductKey, g_dev_mqtt.DeviceName);
+                esp_mqtt_client_publish(g_mqtt_client, joycon_topic, publish_data, 0, 1, 0);
+
+                user_free(__func__, publish_data); 
+                publish_data = NULL;
+            }
+        }
+    }
 }
 
 void app_main(void)
@@ -769,6 +791,7 @@ void app_main(void)
         start_dns_server(&config);
     }
 
+    xTaskCreatePinnedToCore(mqtt_publish_task, "mqtt_publish_task", 1024 * 4, NULL, 4, NULL, 0);
     xTaskCreatePinnedToCore(button_task, "button_task", 1024 * 4, NULL, 10, NULL, 0);
     xTaskCreatePinnedToCore(joystick_task, "joystick_task", 1024 * 4, NULL, 5, NULL, 0);
     // xTaskCreatePinnedToCore(display_task, "display_task", 1024 * 8, NULL, 4, NULL, 1);

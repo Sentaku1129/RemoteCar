@@ -15,6 +15,8 @@
 
 #include "lcd_font.h"
 
+bool remote_led_status = false;
+
 static spi_device_handle_t spi_handle = NULL;
 
 uint8_t lcd_frame_buffer[LCD_WIDTH * LCD_PAGES] = {0};
@@ -274,7 +276,7 @@ void lcd_draw_v_line(uint8_t x, uint8_t y_start, uint8_t y_end, uint8_t color)
         y_start = y_end;
         y_end = temp;
     }
-        return;
+    return;
     for (uint8_t y = y_start; y <= y_end; y++)
         lcd_draw_pixel(x, y, color);
 }
@@ -290,7 +292,8 @@ void lcd_draw_v_line(uint8_t x, uint8_t y_start, uint8_t y_end, uint8_t color)
 void lcd_draw_rect_empty(uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint8_t color)
 {
     // 参数检查，防止尺寸为0导致错误
-    if (w == 0 || h == 0) return;
+    if (w == 0 || h == 0)
+        return;
 
     // 1. 上横线
     lcd_draw_h_line(x, x + w - 1, y, color);
@@ -814,7 +817,7 @@ void draw_dashboard_screen()
     lcd_clear_buffer();
 
     // ================== 状态栏绘制 ==================
-    
+
     // 绘制 WiFi (左上角)
     draw_wifi_widget(2, 2);
 
@@ -828,14 +831,13 @@ void draw_dashboard_screen()
     // 分割线
     lcd_draw_v_line(0, 12, LCD_WIDTH, 1);
 
-
     // ================== 摇杆区域绘制 ==================
-    
+
     // 屏幕下半部分高度约 52，中心 Y 约为 12 + 26 = 38
     // 两个圆心 X 坐标：
     // 左摇杆: 128 * 1/4 = 32
     // 右摇杆: 128 * 3/4 = 96
-    
+
     uint8_t joy_y = 38;
     uint8_t joy_r = 18; // 半径18，直径36，上下留空
 
@@ -848,7 +850,6 @@ void draw_dashboard_screen()
     draw_joystick_visual(96, joy_y, joy_r, joycon_value_R);
     // 标注 R
     lcd_showString_buffer(96 - 3, joy_y + joy_r + 2, "R");
-
 
     // ================== 数据数值显示 (可选) ==================
     // 如果你想在屏幕中间显示具体数值，可以加在这里
@@ -973,6 +974,7 @@ void read_input_value_task()
                 xQueueSend(input_queue, &evt, pdMS_TO_TICKS(50));
             }
         }
+
         vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
@@ -997,13 +999,40 @@ void display_task(void *arg)
                 switch (evt.type)
                 {
                 case 0:
-                    break;
+                {
+                    if (strlen(g_dev_config.remote_mac) == 12)
+                    {
+                        cJSON *root = cJSON_CreateObject();
+                        cJSON_AddNumberToObject(root, "code", 101);
+                        cJSON *data = cJSON_CreateObject();
+                        cJSON_AddNumberToObject(data, "left", joycon_value_L.y);
+                        cJSON_AddNumberToObject(data, "right", joycon_value_R.x);
+                        cJSON_AddItemToObject(root, "data", data);
+                        char *publish = cJSON_PrintUnformatted(root);
+                        if (xQueueSend(publish_queue, publish, pdMS_TO_TICKS(50)) != pdTRUE)
+                        {
+                            user_free(__func__, publish);
+                        }
+                    }
+                }
+                break;
                 case 1:
                 {
                     switch (evt.id)
                     {
                     case 0:
-                        break;
+                    {
+                        remote_led_status = !remote_led_status;
+                        cJSON *root = cJSON_CreateObject();
+                        cJSON_AddNumberToObject(root, "code", 201);
+                        cJSON_AddBoolToObject(root, "data", remote_led_status);
+                        char *publish = cJSON_PrintUnformatted(root);
+                        if (xQueueSend(publish_queue, publish, pdMS_TO_TICKS(50)) != pdTRUE)
+                        {
+                            user_free(__func__, publish);
+                        }
+                    }
+                    break;
                     case 1:
                         break;
                     case 2:
