@@ -17,7 +17,8 @@ static adc_cali_handle_t right_y_cali_handle = NULL;
 joystick_normalized_t joycon_value_L = {0};
 joystick_normalized_t joycon_value_R = {0};
 
-int g_battery_level;   // 0-100
+int g_battery_level; // 0-100
+static adc_cali_handle_t battery_cali_handle = NULL;
 
 static bool adc_calibration_init(adc_unit_t unit, adc_channel_t channel, adc_atten_t atten, adc_cali_handle_t *out_handle)
 {
@@ -75,24 +76,43 @@ esp_err_t joystick_init(void)
     adc_oneshot_config_channel(unit_handle, RIGHT_Y_CHANNEL, &config);
 
     bool do_left_x_cali = adc_calibration_init(ADC_UNIT_1, LEFT_X_CHANNEL, ADC_ATTEN, &left_x_cali_handle);
-    if(!do_left_x_cali)
+    if (!do_left_x_cali)
     {
         ESP_LOGE(__func__, "Left X Calibration Fail");
     }
     bool do_left_y_cali = adc_calibration_init(ADC_UNIT_1, LEFT_Y_CHANNEL, ADC_ATTEN, &left_y_cali_handle);
-    if(!do_left_y_cali)
+    if (!do_left_y_cali)
     {
         ESP_LOGE(__func__, "Left Y Calibration Fail");
     }
     bool do_right_x_cali = adc_calibration_init(ADC_UNIT_1, RIGHT_X_CHANNEL, ADC_ATTEN, &right_x_cali_handle);
-    if(!do_right_x_cali)
+    if (!do_right_x_cali)
     {
         ESP_LOGE(__func__, "Right X Calibration Fail");
     }
     bool do_right_y_cali = adc_calibration_init(ADC_UNIT_1, RIGHT_Y_CHANNEL, ADC_ATTEN, &right_y_cali_handle);
-    if(!do_right_y_cali)
+    if (!do_right_y_cali)
     {
         ESP_LOGE(__func__, "Right Y Calibration Fail");
+    }
+    return ret;
+}
+
+esp_err_t battery_init()
+{
+    esp_err_t ret = ESP_OK;
+
+    adc_oneshot_chan_cfg_t config = {
+        .atten = ADC_ATTEN,
+        .bitwidth = ADC_WIDTH,
+    };
+
+    adc_oneshot_config_channel(unit_handle, BATTERY_CHANNEL, &config);
+
+    bool do_battery_cali = adc_calibration_init(ADC_UNIT_1, BATTERY_CHANNEL, ADC_ATTEN, &battery_cali_handle);
+    if (!do_battery_cali)
+    {
+        ESP_LOGI(__func__, "Battery Calibration Fail");
     }
     return ret;
 }
@@ -130,6 +150,36 @@ esp_err_t joystick_read_right(joystick_value_t *value)
         ESP_LOGE(__func__, "Failed to read left joystick");
         return ESP_FAIL;
     }
+    return ESP_OK;
+}
+
+esp_err_t battery_read()
+{
+    int raw = 0, voltage = 0;
+    esp_err_t ret = adc_oneshot_read(unit_handle, BATTERY_CHANNEL, &raw);
+
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE("BATTERY", "ADC read failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    ret = adc_cali_raw_to_voltage(battery_cali_handle, raw, &voltage);
+    if(ret != ESP_OK)
+    {
+        ESP_LOGI(__func__, "ADC cali failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    voltage *=2;
+
+    voltage = voltage < 3000 ? 3000 : voltage;
+    voltage = voltage > 4200 ? 4200 : voltage;
+
+    // 计算电池电量百分比
+    g_battery_level = (voltage - 3000) * 100 / 1200;
+    // ESP_LOGI(__func__, "raw = %d, voltage = %dmv, battery level = %d%%", raw, voltage, g_battery_level);
+
     return ESP_OK;
 }
 
@@ -196,6 +246,7 @@ esp_err_t joystick_read_right_normalized(joystick_normalized_t *value)
 void joystick_task(void *arg)
 {
     joystick_init();
+    battery_init();
     joystick_normalized_t left_norm = {0}, right_norm = {0};
     while (1)
     {
@@ -236,6 +287,8 @@ void joystick_task(void *arg)
             {
                 joystcik_right_vitual_button = joystick_vitual_idle;
             }
+
+            battery_read();
         }
         else
         {

@@ -366,17 +366,18 @@ void button_task(void *arg)
         {
             if(key_value[i].key_status != KEY_IDLE)
             {
-                ESP_LOGI(__func__, "GPIO_NUM_%d mode is %d; value = %lld; check %s finished",
-                                    key_io[i].GPIO_NUM, 
-                                    key_value[i].key_status, 
-                                    key_value[i].key_value, 
-                                    key_value[i].key_fsm_finished ? "is" : "isnt");
-                if(key_value[i].key_fsm_finished)
-                {
-                    key_value[i].key_status = KEY_IDLE;
-                    key_value[i].key_value = 0;
-                    key_value[i].key_fsm_finished = false;
-                }
+                // ESP_LOGI(__func__, "GPIO_NUM_%d mode is %d; value = %lld; check %s finished",
+                //                     key_io[i].GPIO_NUM, 
+                //                     key_value[i].key_status, 
+                //                     key_value[i].key_value, 
+                //                     key_value[i].key_fsm_finished ? "is" : "isnt");
+
+                // if(key_value[i].key_fsm_finished)
+                // {
+                //     key_value[i].key_status = KEY_IDLE;
+                //     key_value[i].key_value = 0;
+                //     key_value[i].key_fsm_finished = false;
+                // }
             }
         }
         vTaskDelay(pdMS_TO_TICKS(10));

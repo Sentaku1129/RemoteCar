@@ -96,14 +96,14 @@ static esp_err_t check_sys_config(void)
     size_t require_size = 0;
 
     // ssid
-    if(nvs_get_str(nvs_handle, NVS_SYS_WIFI_SSID, NULL, &require_size) != ESP_OK)
+    if (nvs_get_str(nvs_handle, NVS_SYS_WIFI_SSID, NULL, &require_size) != ESP_OK)
     {
         ESP_LOGI(__func__, "read ssid nvs fail");
         goto check_sys_finally;
     }
     else
     {
-        if(require_size == 0)
+        if (require_size == 0)
         {
             ESP_LOGI(__func__, "no wifi ssid");
             ret = ESP_FAIL;
@@ -122,7 +122,7 @@ static esp_err_t check_sys_config(void)
     }
     else
     {
-        if(require_size == 0)
+        if (require_size == 0)
         {
             ESP_LOGI(__func__, "no wifi pswd");
             ret = ESP_FAIL;
@@ -130,7 +130,7 @@ static esp_err_t check_sys_config(void)
         else
         {
             nvs_get_str(nvs_handle, NVS_SYS_WIFI_PSWD, g_dev_config.dev_pswd, &require_size);
-        }        
+        }
     }
 
     // name
@@ -141,7 +141,7 @@ static esp_err_t check_sys_config(void)
     }
     else
     {
-        if(require_size == 0)
+        if (require_size == 0)
         {
             ESP_LOGI(__func__, "no dev name");
             ret = ESP_FAIL;
@@ -149,7 +149,7 @@ static esp_err_t check_sys_config(void)
         else
         {
             nvs_get_str(nvs_handle, NVS_SYS_DEV_NAME, g_dev_config.dev_name, &require_size);
-        }        
+        }
     }
 
 check_sys_finally:
@@ -697,7 +697,7 @@ try_get_dev_info:
                 cJSON *data = cJSON_GetObjectItem(root, "data");
                 char *product_key = (cJSON_GetObjectItem(data, "ProductKey") != NULL ? cJSON_GetObjectItem(data, "ProductKey")->valuestring : NULL);
                 char *device_name = (cJSON_GetObjectItem(data, "DeviceName") != NULL ? cJSON_GetObjectItem(data, "DeviceName")->valuestring : NULL);
-                char *device_secret = (cJSON_GetObjectItem(data, "DeviceSecret ") != NULL ? cJSON_GetObjectItem(data, "DeviceSecret ")->valuestring : NULL);
+                char *device_secret = (cJSON_GetObjectItem(data, "DeviceSecret") != NULL ? cJSON_GetObjectItem(data, "DeviceSecret")->valuestring : NULL);
                 if (product_key == NULL || device_name == NULL || device_secret == NULL)
                 {
                     retry++;
@@ -733,22 +733,24 @@ void reset_timer_callback(void *arg)
 
 void mqtt_publish_task(void *arg)
 {
-    char *publish_data = NULL; // 用来接收队列弹出的指针
-
-    publish_queue = xQueueCreate(10, sizeof(char *));
+    publish_queue = xQueueCreate(10, sizeof(mqtt_message_t));
 
     while (1)
     {
-        if (xQueueReceive(publish_queue, &publish_data, portMAX_DELAY) == pdTRUE)
+
+        mqtt_message_t msg = {0};
+        if (xQueueReceive(publish_queue, &msg, portMAX_DELAY) == pdTRUE)
         {
-            if (publish_data != NULL)
+            if (msg.data != NULL)
             {
                 char joycon_topic[128] = {0};
                 sprintf(joycon_topic, "/%s/%s/user/joycon", g_dev_mqtt.ProductKey, g_dev_mqtt.DeviceName);
-                esp_mqtt_client_publish(g_mqtt_client, joycon_topic, publish_data, 0, 1, 0);
+                esp_mqtt_client_publish(g_mqtt_client, joycon_topic, msg.data, 0, 1, 0);
 
-                user_free(__func__, publish_data); 
-                publish_data = NULL;
+                if (msg.dynamic)
+                {
+                    user_free(__func__, msg.data);
+                }
             }
         }
     }
@@ -772,6 +774,11 @@ void app_main(void)
     };
     esp_timer_create(&esp_timer_args, &g_reset_timer);
 
+    xTaskCreatePinnedToCore(button_task, "button_task", 1024 * 4, NULL, 10, NULL, 0);
+    xTaskCreatePinnedToCore(joystick_task, "joystick_task", 1024 * 4, NULL, 5, NULL, 0);
+    xTaskCreatePinnedToCore(mqtt_publish_task, "mqtt_publish_task", 1024 * 4, NULL, 4, NULL, 0);
+    xTaskCreatePinnedToCore(display_task, "display_task", 1024 * 8, NULL, 4, NULL, 1);
+
     ret = check_sys_config();
     if (ret == ESP_OK)
     {
@@ -791,10 +798,6 @@ void app_main(void)
         start_dns_server(&config);
     }
 
-    xTaskCreatePinnedToCore(mqtt_publish_task, "mqtt_publish_task", 1024 * 4, NULL, 4, NULL, 0);
-    xTaskCreatePinnedToCore(button_task, "button_task", 1024 * 4, NULL, 10, NULL, 0);
-    xTaskCreatePinnedToCore(joystick_task, "joystick_task", 1024 * 4, NULL, 5, NULL, 0);
-    // xTaskCreatePinnedToCore(display_task, "display_task", 1024 * 8, NULL, 4, NULL, 1);
     while (1)
     {
         esp_wifi_sta_get_rssi(&g_wifi_rssi);

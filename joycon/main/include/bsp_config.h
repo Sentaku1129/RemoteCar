@@ -61,6 +61,13 @@ extern dev_config_t g_dev_config;
 extern bind_car_dev_t g_bind_car_dev;
 extern QueueHandle_t publish_queue;
 
+typedef struct
+{
+    char *data;
+    bool dynamic;
+}mqtt_message_t;
+
+
 extern const char root_start[]         asm("_binary_root_html_start");
 extern const char root_end[]           asm("_binary_root_html_end");
 

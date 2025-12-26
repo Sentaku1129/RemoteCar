@@ -14,8 +14,8 @@
 // 按键
 #define BUTTON_0    GPIO_NUM_25
 #define BUTTON_1    GPIO_NUM_26
-#define BUTTON_2    GPIO_NUM_27
-#define BUTTON_3    GPIO_NUM_14
+#define BUTTON_2    GPIO_NUM_14
+#define BUTTON_3    GPIO_NUM_27
 
 typedef struct
 {

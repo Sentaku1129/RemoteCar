@@ -276,9 +276,10 @@ void lcd_draw_v_line(uint8_t x, uint8_t y_start, uint8_t y_end, uint8_t color)
         y_start = y_end;
         y_end = temp;
     }
-    return;
     for (uint8_t y = y_start; y <= y_end; y++)
+    {
         lcd_draw_pixel(x, y, color);
+    }
 }
 
 /**
@@ -550,30 +551,19 @@ void idle_disp_task(void *arg)
  */
 void draw_battery_widget(uint8_t x, uint8_t y)
 {
-    // 1. 画电池轮廓 (宽16, 高8)
-    // 上下边
-    lcd_fill_rect(x, y, x + 14, y, 1);
-    lcd_fill_rect(x, y + 7, x + 14, y + 7, 1);
-    // 左右边
-    lcd_draw_v_line(x, y, y + 7, 1);
-    lcd_draw_v_line(x + 14, y, y + 7, 1);
-    // 电池头
-    lcd_draw_v_line(x + 15, y + 2, y + 5, 1);
-
-    // 2. 计算填充宽度 (最大12像素)
-    int fill_w = (g_battery_level * 12) / 100;
-    if (fill_w > 12)
-        fill_w = 12;
-    if (fill_w < 0)
-        fill_w = 0;
-
-    // 3. 填充电量
-    if (fill_w > 0)
+    // 边界检查，防止溢出
+    if (x + 20 > LCD_WIDTH || y + 8 > LCD_HEIGHT)
     {
-        lcd_fill_rect(x + 2, y + 2, fill_w, 4, 1);
+        ESP_LOGE("LCD", "Battery widget exceeds screen boundaries");
+        return;
     }
 
-    // 可选：显示百分比文字
+    // 绘制电池边框 (宽16, 高8)
+    lcd_fill_rect(x + 18, y + 3, 2, 2, 1);  // 电池头
+    lcd_draw_rect_empty(x, y, 16, 8, 1);    // 电池框
+    lcd_fill_rect(x, y, x + 18 * g_battery_level / 100, 8, 1);
+
+    // 显示电量百分比
     char buf[5];
     sprintf(buf, "%d%%", g_battery_level);
     lcd_showString_buffer(x - 24, y, buf);
@@ -642,9 +632,11 @@ void draw_joystick_visual(uint8_t cx, uint8_t cy, uint8_t r, joystick_normalized
     int dx = (int)(joy.x * max_move);
     int dy = (int)(joy.y * max_move);
 
+    // ESP_LOGI(__func__, "dx: %d, dy: %d",dx, dy);
+
     // 4. 绘制实心小球 (代表摇杆头)
     // 半径为 3
-    lcd_fill_circle(cx + dx, cy + dy, 3, 1);
+    lcd_fill_circle(cx + dx, cy - dy, 3, 1);
 }
 
 esp_err_t bind_device(void *arg)
@@ -826,7 +818,7 @@ void draw_dashboard_screen()
     lcd_showString_buffer(38, 2, "REMOTE");
 
     // 绘制 电池 (右上角)
-    draw_battery_widget(LCD_WIDTH - 18, 2);
+    draw_battery_widget(LCD_WIDTH - 20, 2);
 
     // 分割线
     lcd_draw_v_line(0, 12, LCD_WIDTH, 1);
@@ -838,8 +830,8 @@ void draw_dashboard_screen()
     // 左摇杆: 128 * 1/4 = 32
     // 右摇杆: 128 * 3/4 = 96
 
-    uint8_t joy_y = 38;
-    uint8_t joy_r = 18; // 半径18，直径36，上下留空
+    uint8_t joy_y = 34;
+    uint8_t joy_r = 17; // 半径18，直径36，上下留空
 
     // --- 左摇杆 (L) ---
     draw_joystick_visual(32, joy_y, joy_r, joycon_value_L);
@@ -851,6 +843,8 @@ void draw_dashboard_screen()
     // 标注 R
     lcd_showString_buffer(96 - 3, joy_y + joy_r + 2, "R");
 
+    // ESP_LOGI(__func__, "L: x=%.2f y=%.2f; R: x=%.2f y=%.2f", joycon_value_L.x, joycon_value_L.y, joycon_value_R.x, joycon_value_R.y);
+
     // ================== 数据数值显示 (可选) ==================
     // 如果你想在屏幕中间显示具体数值，可以加在这里
     // char buf[16];
@@ -860,12 +854,25 @@ void draw_dashboard_screen()
     // 2. 提交显存刷新
     lcd_refresh_frame();
 }
-void draw_menu_screen(disp_menu_t *menu, int len, int sel)
+
+void draw_menu_screen(const char *menu_name, disp_menu_t *menu, int len, int sel)
 {
     lcd_clear_buffer();
 
     // 1. 绘制标题栏
-    lcd_showString_buffer(2, 2, "MENU");
+    // lcd_showString_buffer(42, 2, "MENU");
+    if (strlen(menu_name) * 6 > LCD_WIDTH)
+    {
+        ESP_LOGW("LCD", "String too long to display!");
+        char truncated[16];
+        snprintf(truncated, sizeof(truncated), "%.15s", (char *)menu_name); // 截断到15字符
+        lcd_showString_buffer(64 - (strlen(truncated) * 8) / 2, 2, truncated);
+    }
+    else
+    {
+        lcd_showString_buffer(64 - (strlen(menu_name) * 8) / 2, 2, (char *)menu_name);
+    }
+    lcd_showString_buffer(64 - (strlen(menu_name) * 8) / 2, 2, (char *)menu_name);
     lcd_draw_v_line(0, 14, LCD_WIDTH, 1);
 
     // 2. 计算滚动窗口
@@ -971,6 +978,15 @@ void read_input_value_task()
                 evt.type = 1;
                 evt.id = i;
                 evt.key_val = key_value[i];
+
+                if (key_value[i].key_fsm_finished)
+                {
+                    key_value[i].key_status = KEY_IDLE;
+                    key_value[i].key_value = 0;
+                    key_value[i].key_fsm_finished = false;
+                }
+
+                ESP_LOGI(__func__, "status = %d, value = %lld, fsm_finished = %s", evt.key_val.key_status, evt.key_val.key_value, evt.key_val.key_fsm_finished ? "true" : "false");
                 xQueueSend(input_queue, &evt, pdMS_TO_TICKS(50));
             }
         }
@@ -981,6 +997,9 @@ void read_input_value_task()
 
 void display_task(void *arg)
 {
+
+    lcd_st7567_init();
+
     // 0: 仪表盘模式 1: 设置菜单模式
     int disp_mode = 0;
     disp_menu_t *curr_menu = main_menu;
@@ -988,6 +1007,7 @@ void display_task(void *arg)
     int cursor = 0;
 
     input_queue = xQueueCreate(5, sizeof(input_event_t));
+    xTaskCreatePinnedToCore(read_input_value_task, "read_input_value_task", 1024 * 4, NULL, 4, NULL, 0);
 
     input_event_t evt;
     while (1)
@@ -1009,15 +1029,21 @@ void display_task(void *arg)
                         cJSON_AddNumberToObject(data, "right", joycon_value_R.x);
                         cJSON_AddItemToObject(root, "data", data);
                         char *publish = cJSON_PrintUnformatted(root);
-                        if (xQueueSend(publish_queue, publish, pdMS_TO_TICKS(50)) != pdTRUE)
+                        mqtt_message_t msg = {
+                            .data = publish,
+                            .dynamic = true,
+                        };
+                        if (xQueueSend(publish_queue, &msg, pdMS_TO_TICKS(50)) != pdTRUE)
                         {
                             user_free(__func__, publish);
                         }
+                        cJSON_Delete(root);
                     }
                 }
                 break;
                 case 1:
                 {
+                    ESP_LOGI(__func__, "id = %d", evt.id);
                     switch (evt.id)
                     {
                     case 0:
@@ -1027,10 +1053,15 @@ void display_task(void *arg)
                         cJSON_AddNumberToObject(root, "code", 201);
                         cJSON_AddBoolToObject(root, "data", remote_led_status);
                         char *publish = cJSON_PrintUnformatted(root);
-                        if (xQueueSend(publish_queue, publish, pdMS_TO_TICKS(50)) != pdTRUE)
+                        mqtt_message_t msg = {
+                            .data = publish,
+                            .dynamic = true,
+                        };
+                        if (xQueueSend(publish_queue, &msg, pdMS_TO_TICKS(50)) != pdTRUE)
                         {
                             user_free(__func__, publish);
                         }
+                        cJSON_Delete(root);
                     }
                     break;
                     case 1:
@@ -1126,18 +1157,21 @@ void display_task(void *arg)
                         break;
                     case 3: // 取消(Back)
                     {
-                        if (curr_menu->supmenus != NULL)
+                        if (evt.key_val.key_fsm_finished)
                         {
-                            cursor = 0;
-                            curr_menu_len = curr_menu[cursor].supmenu_count;
-                            curr_menu = curr_menu[cursor].supmenus;
-                        }
-                        else // joycon defalut display
-                        {
-                            disp_mode = 0;
-                            cursor = 0;
-                            curr_menu_len = 2;
-                            curr_menu = main_menu;
+                            if (curr_menu->supmenus != NULL)
+                            {
+                                cursor = 0;
+                                curr_menu_len = curr_menu[cursor].supmenu_count;
+                                curr_menu = curr_menu[cursor].supmenus;
+                            }
+                            else // joycon defalut display
+                            {
+                                disp_mode = 0;
+                                cursor = 0;
+                                curr_menu_len = 2;
+                                curr_menu = main_menu;
+                            }
                         }
                     }
                     break;
@@ -1160,7 +1194,7 @@ void display_task(void *arg)
         }
         else
         {
-            draw_menu_screen(curr_menu, curr_menu_len, cursor);
+            draw_menu_screen(curr_menu->supmenus ? curr_menu->supmenus->desc : "MAIN MENU", curr_menu, curr_menu_len, cursor);
         }
     }
 }
