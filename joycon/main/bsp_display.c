@@ -3,6 +3,7 @@
 #include "driver/spi_master.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
+#include "nvs_flash.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "cJSON.h"
@@ -23,6 +24,8 @@ uint8_t lcd_frame_buffer[LCD_WIDTH * LCD_PAGES] = {0};
 
 dev_list_t dev_list[MAX_DEVICE_LIST];
 disp_menu_t dev_list_menu[MAX_DEVICE_LIST];
+disp_menu_t *dev_list_ptrs = NULL;
+int dev_list_count = 0;
 TaskHandle_t idle_disp_task_handle = NULL;
 
 // ==================== LCD 复位 ====================
@@ -559,14 +562,14 @@ void draw_battery_widget(uint8_t x, uint8_t y)
     }
 
     // 绘制电池边框 (宽16, 高8)
-    lcd_fill_rect(x + 18, y + 3, 2, 2, 1);  // 电池头
-    lcd_draw_rect_empty(x, y, 16, 8, 1);    // 电池框
-    lcd_fill_rect(x, y, x + 18 * g_battery_level / 100, 8, 1);
+    lcd_fill_rect(x + 16, y + 5, 2, 2, 1); // 电池头
+    lcd_draw_rect_empty(x, y + 2, 16, 8, 1);   // 电池框
+    lcd_fill_rect(x, y + 2, 16 * g_battery_level / 100, 8, 1);
 
     // 显示电量百分比
     char buf[5];
     sprintf(buf, "%d%%", g_battery_level);
-    lcd_showString_buffer(x - 24, y, buf);
+    lcd_showString_buffer(x - 28, y, buf);
 }
 
 /**
@@ -726,6 +729,29 @@ esp_err_t unbind_device(void *arg)
     return ESP_FAIL;
 }
 
+esp_err_t reset_device(void *arg)
+{
+    nvs_handle_t nvs_handle;
+    esp_err_t ret = nvs_open(NVS_SYS_CONFIG, NVS_READWRITE, &nvs_handle);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(__func__, "open nvs error: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    ret = nvs_erase_all(nvs_handle);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(__func__, "erase nvs error: %s", esp_err_to_name(ret));
+        nvs_close(nvs_handle);
+        return ret;
+    }
+    nvs_commit(nvs_handle);
+    nvs_close(nvs_handle);
+    esp_restart();
+    return ESP_OK;
+}
+
 esp_err_t check_devices(void *arg)
 {
     if (g_wifi_connected)
@@ -737,11 +763,12 @@ esp_err_t check_devices(void *arg)
         esp_err_t ret = http_post(url, NULL, resp, 255);
         if (ret == ESP_OK)
         {
+            ESP_LOGI(__func__, "check devices resp: %s", resp);
             cJSON *root = cJSON_Parse(resp);
             user_free(__func__, resp);
             if (cJSON_GetObjectItem(root, "success") && cJSON_IsTrue(cJSON_GetObjectItem(root, "success")))
             {
-                for (int i = 0; i < cJSON_GetObjectItem(root, "device_len")->valueint; i++)
+                for (int i = 0; i < cJSON_GetObjectItem(root, "device_len")->valueint && i < 10; i++)
                 {
                     cJSON *item = cJSON_GetArrayItem(cJSON_GetObjectItem(root, "data"), i);
                     if (item)
@@ -768,8 +795,10 @@ esp_err_t check_devices(void *arg)
                     }
                 }
 
-                check_menu[0].submenus = dev_list_menu;
+                check_menu[0].submenus = cJSON_GetObjectItem(root, "device_len")->valueint > 0 ? dev_list_menu : NULL;
                 check_menu[0].submenu_count = cJSON_GetObjectItem(root, "device_len")->valueint;
+
+
                 cJSON_Delete(root);
                 vTaskDelete(idle_disp_task_handle);
                 return ESP_OK;
@@ -795,7 +824,7 @@ disp_menu_t check_menu[] = {
 disp_menu_t settings_menu[] = {
     {"check_disp", "check display", main_menu, 2, check_menu, 1, check_devices, NULL},
     {"unbond_disp", "unbond display", main_menu, 2, NULL, 0, unbind_device, NULL},
-    {"reset", "reset device", main_menu, 2, NULL, 0, NULL, NULL},
+    {"reset", "reset device", main_menu, 2, NULL, 0, reset_device, NULL},
 };
 
 disp_menu_t main_menu[] = {
@@ -811,7 +840,7 @@ void draw_dashboard_screen()
     // ================== 状态栏绘制 ==================
 
     // 绘制 WiFi (左上角)
-    draw_wifi_widget(2, 2);
+    draw_wifi_widget(2, 4);
 
     // 绘制 标题 (顶部居中)
     // 假设 LCD_WIDTH = 128, "DASHBOARD" 宽约 54px
@@ -819,9 +848,6 @@ void draw_dashboard_screen()
 
     // 绘制 电池 (右上角)
     draw_battery_widget(LCD_WIDTH - 20, 2);
-
-    // 分割线
-    lcd_draw_v_line(0, 12, LCD_WIDTH, 1);
 
     // ================== 摇杆区域绘制 ==================
 
@@ -866,14 +892,12 @@ void draw_menu_screen(const char *menu_name, disp_menu_t *menu, int len, int sel
         ESP_LOGW("LCD", "String too long to display!");
         char truncated[16];
         snprintf(truncated, sizeof(truncated), "%.15s", (char *)menu_name); // 截断到15字符
-        lcd_showString_buffer(64 - (strlen(truncated) * 8) / 2, 2, truncated);
+        lcd_showString_buffer(64 - (strlen(truncated) * 6) / 2, 2, truncated);
     }
     else
     {
-        lcd_showString_buffer(64 - (strlen(menu_name) * 8) / 2, 2, (char *)menu_name);
+        lcd_showString_buffer(64 - (strlen(menu_name) * 6) / 2, 2, (char *)menu_name);
     }
-    lcd_showString_buffer(64 - (strlen(menu_name) * 8) / 2, 2, (char *)menu_name);
-    lcd_draw_v_line(0, 14, LCD_WIDTH, 1);
 
     // 2. 计算滚动窗口
     int visible_cnt = (LCD_HEIGHT - MENU_HEADER_H) / MENU_ITEM_H;
@@ -901,12 +925,11 @@ void draw_menu_screen(const char *menu_name, disp_menu_t *menu, int len, int sel
         if (curr_idx == sel)
         {
             // 选中：绘制实心背景条 + 反色文字
-            lcd_fill_rect(0, y, LCD_WIDTH - SCROLL_W - 2, MENU_ITEM_H, 1);
-            lcd_showString_buffer_invert(2, y + 2, (char *)item->desc);
+            lcd_fill_circle(5, y + MENU_ITEM_H / 2, 4, 1); // 选中圆圈背景
+            lcd_showString_buffer(12, y + 2, (char *)item->desc);
         }
         else
         {
-            // 未选中：绘制普通文字
             lcd_showString_buffer(2, y + 2, (char *)item->desc);
         }
     }
@@ -948,27 +971,37 @@ QueueHandle_t input_queue;
 
 void read_input_value_task()
 {
+    static TickType_t last_wake_time = 0;
     while (1)
     {
         input_event_t evt = {0};
         joystick_vatual_button_t vitual_button = joystick_vitual_idle;
-
-        vitual_button = read_left_joystick_postion();
-        if (vitual_button == joystick_vitual_left || vitual_button == joystick_vitual_right)
+        if (xTaskGetTickCount() - last_wake_time > pdMS_TO_TICKS(200))
         {
-            evt.type = 0;
-            evt.id = 0;
-            evt.joy_val = vitual_button;
-            xQueueSend(input_queue, &evt, pdMS_TO_TICKS(50));
-        }
+            bool joystick_active = false;
+            vitual_button = read_left_joystick_postion();
+            if (vitual_button == joystick_vitual_left || vitual_button == joystick_vitual_right)
+            {
+                evt.type = 0;
+                evt.id = 0;
+                evt.joy_val = vitual_button;
+                xQueueSend(input_queue, &evt, pdMS_TO_TICKS(50));
+                joystick_active = true;
+            }
 
-        vitual_button = read_right_joystick_postion();
-        if (vitual_button == joystick_vitual_up || vitual_button == joystick_vitual_down)
-        {
-            evt.type = 0;
-            evt.id = 0;
-            evt.joy_val = vitual_button;
-            xQueueSend(input_queue, &evt, pdMS_TO_TICKS(50));
+            vitual_button = read_right_joystick_postion();
+            if (vitual_button == joystick_vitual_up || vitual_button == joystick_vitual_down)
+            {
+                evt.type = 0;
+                evt.id = 0;
+                evt.joy_val = vitual_button;
+                xQueueSend(input_queue, &evt, pdMS_TO_TICKS(50));
+                joystick_active = true;
+            }
+            if (joystick_active)
+            {
+                last_wake_time = xTaskGetTickCount();
+            }
         }
 
         for (int i = 0; i < KEY_NUM; i++)
@@ -1003,7 +1036,7 @@ void display_task(void *arg)
     // 0: 仪表盘模式 1: 设置菜单模式
     int disp_mode = 0;
     disp_menu_t *curr_menu = main_menu;
-    int curr_menu_len = 1;
+    int curr_menu_len = 2;
     int cursor = 0;
 
     input_queue = xQueueCreate(5, sizeof(input_event_t));
@@ -1012,7 +1045,7 @@ void display_task(void *arg)
     input_event_t evt;
     while (1)
     {
-        if (xQueueReceive(input_queue, &evt, pdMS_TO_TICKS(20)) == pdTRUE)
+        if (xQueueReceive(input_queue, &evt, pdMS_TO_TICKS(10)) == pdTRUE)
         {
             if (disp_mode == 0)
             {
@@ -1092,7 +1125,7 @@ void display_task(void *arg)
                 {
                 case 0:
                 {
-                    switch (evt.id)
+                    switch (evt.joy_val)
                     {
                     case joystick_vitual_idle:
                         break;
@@ -1124,32 +1157,26 @@ void display_task(void *arg)
                         break;
                     case 1: // 确认(Action)
                     {
-                        if (curr_menu[cursor].action != NULL)
+                        if (evt.key_val.key_fsm_finished)
                         {
-                            if (curr_menu[cursor].action(curr_menu[cursor].arg) != ESP_OK)
+                            if (curr_menu[cursor].action != NULL)
                             {
-                                ESP_LOGI(__func__, "menu: %s action false", curr_menu[cursor].desc);
-                                curr_menu[cursor].action(curr_menu[cursor].arg);
+                                if (curr_menu[cursor].action(curr_menu[cursor].arg) != ESP_OK)
+                                {
+                                    ESP_LOGI(__func__, "menu: %s action false", curr_menu[cursor].desc);
+                                }
+                                else
+                                {
+                                    ESP_LOGI(__func__, "menu: %s action true", curr_menu[cursor].desc);
+                                }
                             }
-                            else
+
+                            if (curr_menu[cursor].submenus != NULL)
                             {
-                                ESP_LOGI(__func__, "menu: %s action true", curr_menu[cursor].desc);
+                                curr_menu_len = curr_menu[cursor].submenu_count;
+                                curr_menu = curr_menu[cursor].submenus;
+                                cursor = 0;
                             }
-                        }
-
-                        if (curr_menu[cursor].submenus != NULL)
-                        {
-                            cursor = 0;
-                            curr_menu_len = curr_menu[cursor].submenu_count;
-                            curr_menu = curr_menu[cursor].submenus;
-                        }
-
-                        if (curr_menu[cursor].action == NULL && curr_menu[cursor].submenus == NULL)
-                        {
-                            disp_mode = 0;
-                            cursor = 0;
-                            curr_menu_len = 2;
-                            curr_menu = main_menu;
                         }
                     }
                     break;

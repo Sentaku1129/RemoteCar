@@ -96,7 +96,8 @@ static esp_err_t check_sys_config(void)
     size_t require_size = 0;
 
     // ssid
-    if (nvs_get_str(nvs_handle, NVS_SYS_WIFI_SSID, NULL, &require_size) != ESP_OK)
+    ret = nvs_get_str(nvs_handle, NVS_SYS_WIFI_SSID, NULL, &require_size);
+    if (ret != ESP_OK)
     {
         ESP_LOGI(__func__, "read ssid nvs fail");
         goto check_sys_finally;
@@ -107,6 +108,7 @@ static esp_err_t check_sys_config(void)
         {
             ESP_LOGI(__func__, "no wifi ssid");
             ret = ESP_FAIL;
+            goto check_sys_finally;
         }
         else
         {
@@ -115,7 +117,8 @@ static esp_err_t check_sys_config(void)
     }
 
     // pswd
-    if (nvs_get_str(nvs_handle, NVS_SYS_WIFI_PSWD, NULL, &require_size) != ESP_OK)
+    ret = nvs_get_str(nvs_handle, NVS_SYS_WIFI_PSWD, NULL, &require_size);
+    if (ret != ESP_OK)
     {
         ESP_LOGI(__func__, "read pswd nvs fail");
         goto check_sys_finally;
@@ -126,6 +129,7 @@ static esp_err_t check_sys_config(void)
         {
             ESP_LOGI(__func__, "no wifi pswd");
             ret = ESP_FAIL;
+            goto check_sys_finally;
         }
         else
         {
@@ -134,7 +138,8 @@ static esp_err_t check_sys_config(void)
     }
 
     // name
-    if (nvs_get_str(nvs_handle, NVS_SYS_DEV_NAME, NULL, &require_size) != ESP_OK)
+    ret = nvs_get_str(nvs_handle, NVS_SYS_DEV_NAME, NULL, &require_size);
+    if (ret != ESP_OK)
     {
         ESP_LOGI(__func__, "read name nvs fail");
         goto check_sys_finally;
@@ -145,6 +150,7 @@ static esp_err_t check_sys_config(void)
         {
             ESP_LOGI(__func__, "no dev name");
             ret = ESP_FAIL;
+            goto check_sys_finally;
         }
         else
         {
@@ -774,10 +780,11 @@ void app_main(void)
     };
     esp_timer_create(&esp_timer_args, &g_reset_timer);
 
+    xTaskCreatePinnedToCore(beep_task, "beep_task", 1024 * 4, NULL, 6, NULL, 0);
     xTaskCreatePinnedToCore(button_task, "button_task", 1024 * 4, NULL, 10, NULL, 0);
     xTaskCreatePinnedToCore(joystick_task, "joystick_task", 1024 * 4, NULL, 5, NULL, 0);
     xTaskCreatePinnedToCore(mqtt_publish_task, "mqtt_publish_task", 1024 * 4, NULL, 4, NULL, 0);
-    xTaskCreatePinnedToCore(display_task, "display_task", 1024 * 8, NULL, 4, NULL, 1);
+    xTaskCreatePinnedToCore(display_task, "display_task", 1024 * 8, NULL, 5, NULL, 1);
 
     ret = check_sys_config();
     if (ret == ESP_OK)
