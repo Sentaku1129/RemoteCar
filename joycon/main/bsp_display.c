@@ -775,6 +775,7 @@ esp_err_t joy_adjust(void *arg)
     }
 
     joy_adjust_value_t joy_adjust_value = read_joy_adjust_offset();
+    memccpy(&joy_adjust_offset_value, &joy_adjust_value, sizeof(joy_adjust_value_t));
 
     ret = nvs_set_blob(nvs_handle, NVS_SYS_LEFT_X_OFFSET, &joy_adjust_value.left.x, sizeof(float));
     ret = nvs_set_blob(nvs_handle, NVS_SYS_LEFT_Y_OFFSET, &joy_adjust_value.left.y, sizeof(float));
