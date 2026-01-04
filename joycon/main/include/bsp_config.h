@@ -65,6 +65,7 @@ extern int g_wifi_rssi;
 extern dev_config_t g_dev_config;
 extern bind_car_dev_t g_bind_car_dev;
 extern QueueHandle_t publish_queue;
+extern QueueHandle_t beep_queue;
 
 typedef struct
 {

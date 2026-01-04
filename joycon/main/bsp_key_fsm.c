@@ -316,7 +316,7 @@ void key_read_status()
                             key_config[i].key_fsm.key_status = KEY_PRESSED;
                             key_config[i].key_value->key_status = KEY_PRESSED;
                         }
-                            
+
                         key_config[i].key_fsm.key_debouncint_times = key_config[i].key_fsm.key_press_times + key_config[i].key_fsm.key_release_times;
                         key_config[i].key_fsm.key_release_times += key_config[i].key_fsm.key_press_times;
                     }
@@ -367,9 +367,9 @@ void button_task(void *arg)
             if(key_value[i].key_status != KEY_IDLE)
             {
                 // ESP_LOGI(__func__, "GPIO_NUM_%d mode is %d; value = %lld; check %s finished",
-                //                     key_io[i].GPIO_NUM, 
-                //                     key_value[i].key_status, 
-                //                     key_value[i].key_value, 
+                //                     key_io[i].GPIO_NUM,
+                //                     key_value[i].key_status,
+                //                     key_value[i].key_value,
                 //                     key_value[i].key_fsm_finished ? "is" : "isnt");
 
                 // if(key_value[i].key_fsm_finished)
@@ -380,6 +380,6 @@ void button_task(void *arg)
                 // }
             }
         }
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(KEY_POLLING_CYCLE));
     }
 }

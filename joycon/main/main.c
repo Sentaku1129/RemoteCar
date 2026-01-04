@@ -90,8 +90,10 @@ static float nvs_get_float_default(nvs_handle_t h, const char *key, float def)
     esp_err_t err = nvs_get_blob(h, key, &v, &len);
     if (err != ESP_OK || len != sizeof(v))
     {
+        ESP_LOGI(__func__, "nvs get float %s error, use default", key);
         return def;
     }
+    ESP_LOGI(__func__, "nvs get float %s = %f", key, v);
     return v;
 }
 
@@ -107,6 +109,12 @@ static esp_err_t check_sys_config(void)
     }
 
     size_t require_size = 0;
+
+    // joy adjust offset
+    joy_adjust_offset_value.left.x = nvs_get_float_default(nvs_handle, NVS_SYS_LEFT_X_OFFSET, 0.0f);
+    joy_adjust_offset_value.left.y = nvs_get_float_default(nvs_handle, NVS_SYS_LEFT_Y_OFFSET, 0.0f);
+    joy_adjust_offset_value.right.x = nvs_get_float_default(nvs_handle, NVS_SYS_RIGHT_X_OFFSET, 0.0f);
+    joy_adjust_offset_value.right.y = nvs_get_float_default(nvs_handle, NVS_SYS_RIGHT_Y_OFFSET, 0.0f);
 
     // ssid
     ret = nvs_get_str(nvs_handle, NVS_SYS_WIFI_SSID, NULL, &require_size);
@@ -128,12 +136,6 @@ static esp_err_t check_sys_config(void)
             nvs_get_str(nvs_handle, NVS_SYS_WIFI_SSID, g_dev_config.dev_ssid, &require_size);
         }
     }
-
-    // joy adjust offset
-    joy_adjust_offset_value.left.x = nvs_get_float_default(nvs_handle, NVS_SYS_LEFT_X_OFFSET, 0.0f);
-    joy_adjust_offset_value.left.y = nvs_get_float_default(nvs_handle, NVS_SYS_LEFT_Y_OFFSET, 0.0f);
-    joy_adjust_offset_value.right.x = nvs_get_float_default(nvs_handle, NVS_SYS_RIGHT_X_OFFSET, 0.0f);
-    joy_adjust_offset_value.right.y = nvs_get_float_default(nvs_handle, NVS_SYS_RIGHT_Y_OFFSET, 0.0f);
 
     // pswd
     ret = nvs_get_str(nvs_handle, NVS_SYS_WIFI_PSWD, NULL, &require_size);

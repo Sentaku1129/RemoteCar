@@ -130,7 +130,7 @@ void lcd_write_data(uint8_t data)
     };
 
     gpio_set_level(io_LCD_AO, 1); // DC = 1 表示数据
-    
+
     xSemaphoreTake(lcd_spi_mutex, portMAX_DELAY);
     esp_err_t ret = spi_device_polling_transmit(spi_handle, &trans);
     xSemaphoreGive(lcd_spi_mutex);
@@ -153,7 +153,7 @@ void lcd_write_data_bulk(const uint8_t *data, size_t len)
     };
 
     gpio_set_level(io_LCD_AO, 1); // DC = 1 表示数据
-    
+
     xSemaphoreTake(lcd_spi_mutex, portMAX_DELAY);
     esp_err_t ret = spi_device_polling_transmit(spi_handle, &trans);
     xSemaphoreGive(lcd_spi_mutex);
@@ -775,12 +775,28 @@ esp_err_t joy_adjust(void *arg)
     }
 
     joy_adjust_value_t joy_adjust_value = read_joy_adjust_offset();
-    memccpy(&joy_adjust_offset_value, &joy_adjust_value, sizeof(joy_adjust_value_t));
+    memcpy(&joy_adjust_offset_value, &joy_adjust_value, sizeof(joy_adjust_value_t));
 
     ret = nvs_set_blob(nvs_handle, NVS_SYS_LEFT_X_OFFSET, &joy_adjust_value.left.x, sizeof(float));
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(__func__, "nvs set blob error: %s", esp_err_to_name(ret));
+    }
     ret = nvs_set_blob(nvs_handle, NVS_SYS_LEFT_Y_OFFSET, &joy_adjust_value.left.y, sizeof(float));
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(__func__, "nvs set blob error: %s", esp_err_to_name(ret));
+    }
     ret = nvs_set_blob(nvs_handle, NVS_SYS_RIGHT_X_OFFSET, &joy_adjust_value.right.x, sizeof(float));
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(__func__, "nvs set blob error: %s", esp_err_to_name(ret));
+    }
     ret = nvs_set_blob(nvs_handle, NVS_SYS_RIGHT_Y_OFFSET, &joy_adjust_value.right.y, sizeof(float));
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(__func__, "nvs set blob error: %s", esp_err_to_name(ret));
+    }
 
     nvs_commit(nvs_handle);
     nvs_close(nvs_handle);
@@ -1049,6 +1065,9 @@ void read_input_value_task()
                 evt.id = i;
                 evt.key_val = key_value[i];
 
+                beep_msg_t beep_evt =  (evt.key_val.key_status == KEY_PRESSED && evt.key_val.key_fsm_finished) ? beep_button : ((evt.key_val.key_status == KEY_LONG_PRESSED && !evt.key_val.key_fsm_finished) ? beep_continue : beep_none);
+                xQueueSend(beep_queue, &beep_evt, pdMS_TO_TICKS(50));
+
                 if (key_value[i].key_fsm_finished)
                 {
                     key_value[i].key_status = KEY_IDLE;
@@ -1077,6 +1096,7 @@ void read_joystick_value_task(void *arg)
             },
         };
 
+        // ESP_LOGI(__func__, "offset L: x=%f y=%f; R: x=%f y=%f", joy_adjust_offset_value.left.x, joy_adjust_offset_value.left.y, joy_adjust_offset_value.right.x, joy_adjust_offset_value.right.y);
         xQueueSend(input_queue, &evt, pdMS_TO_TICKS(50));
 
         vTaskDelay(pdMS_TO_TICKS(500));
