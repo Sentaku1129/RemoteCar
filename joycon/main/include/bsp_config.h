@@ -50,6 +50,11 @@ typedef struct
 #define NVS_SYS_WIFI_PSWD   "wifipswd"
 #define NVS_SYS_DEV_NAME    "devname"
 
+#define NVS_SYS_LEFT_X_OFFSET   "left_x_offset"
+#define NVS_SYS_LEFT_Y_OFFSET   "left_y_offset"
+#define NVS_SYS_RIGHT_X_OFFSET   "right_x_offset"
+#define NVS_SYS_RIGHT_Y_OFFSET   "right_y_offset"
+
 // soft ap
 #define SOFT_AP_SSID        "JOYSTICK"
 #define SOFT_AP_PSWD        "88888888"

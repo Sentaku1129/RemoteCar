@@ -35,6 +35,7 @@ int g_wifi_con_status = 0;
 int g_wifi_rssi = 0;
 dev_config_t g_dev_config = {0};
 bind_car_dev_t g_bind_car_dev = {.car = {0}, .is_bind = false};
+joy_adjust_value_t joy_adjust_offset_value = {0};
 dev_mqtt_t g_dev_mqtt = {0};
 esp_mqtt_client_handle_t g_mqtt_client = NULL;
 esp_timer_handle_t g_reset_timer = NULL;
@@ -54,11 +55,11 @@ void beep_task(void *arg)
     gpio_config(&beep_cfg);
     gpio_set_level(BEEP_GPIO, 0);
 
-    beep_queue = xQueueCreate(5, sizeof(int32_t));
+    beep_queue = xQueueCreate(5, sizeof(beep_msg_t));
     beep_msg_t beep_msg = beep_none;
     while (1)
     {
-        if (xQueueReceive(beep_queue, NULL, portMAX_DELAY))
+        if (xQueueReceive(beep_queue, &beep_msg, portMAX_DELAY) == pdTRUE)
         {
             if (g_beep_status)
             {
@@ -80,6 +81,18 @@ void beep_task(void *arg)
             }
         }
     }
+}
+
+static float nvs_get_float_default(nvs_handle_t h, const char *key, float def)
+{
+    float v = def;
+    size_t len = sizeof(v);
+    esp_err_t err = nvs_get_blob(h, key, &v, &len);
+    if (err != ESP_OK || len != sizeof(v))
+    {
+        return def;
+    }
+    return v;
 }
 
 static esp_err_t check_sys_config(void)
@@ -115,6 +128,12 @@ static esp_err_t check_sys_config(void)
             nvs_get_str(nvs_handle, NVS_SYS_WIFI_SSID, g_dev_config.dev_ssid, &require_size);
         }
     }
+
+    // joy adjust offset
+    joy_adjust_offset_value.left.x = nvs_get_float_default(nvs_handle, NVS_SYS_LEFT_X_OFFSET, 0.0f);
+    joy_adjust_offset_value.left.y = nvs_get_float_default(nvs_handle, NVS_SYS_LEFT_Y_OFFSET, 0.0f);
+    joy_adjust_offset_value.right.x = nvs_get_float_default(nvs_handle, NVS_SYS_RIGHT_X_OFFSET, 0.0f);
+    joy_adjust_offset_value.right.y = nvs_get_float_default(nvs_handle, NVS_SYS_RIGHT_Y_OFFSET, 0.0f);
 
     // pswd
     ret = nvs_get_str(nvs_handle, NVS_SYS_WIFI_PSWD, NULL, &require_size);
@@ -628,7 +647,7 @@ static void start_mqtt_app(void)
 
     IOT_Sign_MQTT(IOTX_CLOUD_REGION_SHANGHAI, meta_info, sign_mqtt);
 
-    ESP_LOGI(__func__, "pswd: %s %s %s %s", sign_mqtt->password, sign_mqtt->clientid, sign_mqtt->username, sign_mqtt->clientid);
+    // ESP_LOGI(__func__, "pswd: %s %s %s %s", sign_mqtt->password, sign_mqtt->clientid, sign_mqtt->username, sign_mqtt->clientid);
 
     esp_mqtt_client_config_t *mqtt_cfg = user_malloc(sizeof(esp_mqtt_client_config_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     memset(mqtt_cfg, 0, sizeof(esp_mqtt_client_config_t));
@@ -729,6 +748,70 @@ try_get_dev_info:
     user_free(__func__, body);
 }
 
+static void get_bind_dev()
+{
+    char *resp = user_malloc(256, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    const char *url = HTTPS_HOST "/get_binddev";
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddNumberToObject(root, "type", 1);
+    cJSON_AddStringToObject(root, "mac", g_dev_config.dev_mac);
+    cJSON_AddStringToObject(root, "name", g_dev_config.dev_name);
+    char *body = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+
+    esp_err_t ret = ESP_OK;
+    int retry = 0;
+
+try_get_bind_dev:
+    memset(resp, 0x00, 256);
+
+    ret = http_post(url, body, resp, 256);
+
+    if (retry > 12)
+    {
+        esp_restart();
+        vTaskDelay(pdMS_TO_TICKS(5000));
+    }
+
+    if (ret != ESP_OK)
+    {
+        retry++;
+        ESP_LOGE(__func__, "device info get err! retry times: %d", retry);
+        vTaskDelay(pdMS_TO_TICKS(5000));
+        goto try_get_bind_dev;
+    }
+    else
+    {
+        root = cJSON_Parse(resp);
+        if (root == NULL)
+        {
+            retry++;
+            ESP_LOGE(__func__, "resp parse to json fail! retry times: %d", retry);
+            vTaskDelay(pdMS_TO_TICKS(5000));
+        }
+        else
+        {
+            bool success = cJSON_IsTrue(cJSON_GetObjectItem(root, "success"));
+            if (success)
+            {
+                g_bind_car_dev.is_bind = true;
+                memset(g_bind_car_dev.car, 0x00, sizeof(g_bind_car_dev.car));
+                sprintf(g_bind_car_dev.car, "%s", cJSON_GetObjectItem(root, "remote")->valuestring);
+            }
+            else
+            {
+                g_bind_car_dev.is_bind = false;
+                memset(g_bind_car_dev.car, 0x00, sizeof(g_bind_car_dev.car));
+            }
+            cJSON_Delete(root);
+        }
+    }
+
+    ESP_LOGI(__func__, "remote %s bind dev[%s]", g_bind_car_dev.is_bind ? "is" : "is not", g_bind_car_dev.is_bind ? g_bind_car_dev.car : "NULL");
+    user_free(__func__, resp);
+    user_free(__func__, body);
+}
+
 void reset_timer_callback(void *arg)
 {
     esp_mqtt_client_stop(g_mqtt_client);
@@ -795,6 +878,7 @@ void app_main(void)
             vTaskDelay(pdMS_TO_TICKS(1000));
         }
         get_device_info();
+        get_bind_dev();
         start_mqtt_app();
     }
     else

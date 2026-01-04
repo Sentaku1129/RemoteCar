@@ -34,6 +34,15 @@ typedef struct
     float y;
 }joystick_normalized_t;
 
+typedef struct
+{
+    joystick_normalized_t left;
+    joystick_normalized_t right;
+}joy_adjust_value_t;
+
+extern joy_adjust_value_t joy_adjust_offset_value;
+
+
 typedef enum
 {
     joystick_vitual_idle = 0,
@@ -50,5 +59,6 @@ extern int g_battery_level;
 void joystick_task(void *arg);
 joystick_vatual_button_t read_left_joystick_postion();
 joystick_vatual_button_t read_right_joystick_postion();
+joy_adjust_value_t read_joy_adjust_offset();
 
 #endif

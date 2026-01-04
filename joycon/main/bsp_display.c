@@ -27,6 +27,7 @@ disp_menu_t dev_list_menu[MAX_DEVICE_LIST];
 disp_menu_t *dev_list_ptrs = NULL;
 int dev_list_count = 0;
 TaskHandle_t idle_disp_task_handle = NULL;
+SemaphoreHandle_t lcd_spi_mutex = NULL;
 
 // ==================== LCD 复位 ====================
 void lcd_reset(void)
@@ -110,7 +111,9 @@ void lcd_write_command(uint8_t cmd)
     };
 
     gpio_set_level(io_LCD_AO, 0); // DC = 0 表示命令
+    xSemaphoreTake(lcd_spi_mutex, portMAX_DELAY);
     esp_err_t ret = spi_device_polling_transmit(spi_handle, &trans);
+    xSemaphoreGive(lcd_spi_mutex);
     if (ret != ESP_OK)
     {
         ESP_LOGE(__func__, "写命令失败: 0x%02X", cmd);
@@ -127,7 +130,10 @@ void lcd_write_data(uint8_t data)
     };
 
     gpio_set_level(io_LCD_AO, 1); // DC = 1 表示数据
+    
+    xSemaphoreTake(lcd_spi_mutex, portMAX_DELAY);
     esp_err_t ret = spi_device_polling_transmit(spi_handle, &trans);
+    xSemaphoreGive(lcd_spi_mutex);
     if (ret != ESP_OK)
     {
         ESP_LOGE(__func__, "lcd send data error: 0x%02X", data);
@@ -147,7 +153,10 @@ void lcd_write_data_bulk(const uint8_t *data, size_t len)
     };
 
     gpio_set_level(io_LCD_AO, 1); // DC = 1 表示数据
+    
+    xSemaphoreTake(lcd_spi_mutex, portMAX_DELAY);
     esp_err_t ret = spi_device_polling_transmit(spi_handle, &trans);
+    xSemaphoreGive(lcd_spi_mutex);
     if (ret != ESP_OK)
     {
         ESP_LOGE(__func__, "lcd send long data error, length: %d", len);
@@ -562,8 +571,8 @@ void draw_battery_widget(uint8_t x, uint8_t y)
     }
 
     // 绘制电池边框 (宽16, 高8)
-    lcd_fill_rect(x + 16, y + 5, 2, 2, 1); // 电池头
-    lcd_draw_rect_empty(x, y + 2, 16, 8, 1);   // 电池框
+    lcd_fill_rect(x + 16, y + 5, 2, 2, 1);   // 电池头
+    lcd_draw_rect_empty(x, y + 2, 16, 8, 1); // 电池框
     lcd_fill_rect(x, y + 2, 16 * g_battery_level / 100, 8, 1);
 
     // 显示电量百分比
@@ -589,24 +598,25 @@ void draw_wifi_widget(uint8_t x, uint8_t y)
     else
         bars = 1;
 
-    // 绘制 4 个柱子
-    // 柱子1: 高2
-    if (bars >= 1)
-        lcd_fill_rect(x, y + 6, 2, 2, 1);
+    if (g_wifi_connected)
+    {
+        if (bars >= 1)
+            lcd_fill_rect(x, y + 6, 2, 2, 1);
+
+        if (bars >= 2)
+            lcd_fill_rect(x + 4, y + 4, 2, 4, 1);
+
+        if (bars >= 3)
+            lcd_fill_rect(x + 8, y + 2, 2, 6, 1);
+
+        if (bars >= 4)
+            lcd_fill_rect(x + 12, y, 2, 8, 1);
+    }
     else
-        lcd_draw_rect_empty(x, y + 6, 2, 2, 1); // 空心矩形
-
-    // 柱子2: 高4
-    if (bars >= 2)
-        lcd_fill_rect(x + 4, y + 4, 2, 4, 1);
-
-    // 柱子3: 高6
-    if (bars >= 3)
-        lcd_fill_rect(x + 8, y + 2, 2, 6, 1);
-
-    // 柱子4: 高8
-    if (bars >= 4)
-        lcd_fill_rect(x + 12, y, 2, 8, 1);
+    {
+        lcd_fill_rect(x, y + 6, 14, 2, 1);
+        lcd_draw_rect_empty(x, y, 14, 4, 1);
+    }
 }
 
 /**
@@ -752,6 +762,31 @@ esp_err_t reset_device(void *arg)
     return ESP_OK;
 }
 
+esp_err_t joy_adjust(void *arg)
+{
+    nvs_handle_t nvs_handle;
+    esp_err_t ret = nvs_open(NVS_SYS_CONFIG, NVS_READWRITE, &nvs_handle);
+    xTaskCreatePinnedToCore(idle_disp_task, "idle_disp_task", 1024 * 2, "JOY ADJUST", 2, &idle_disp_task_handle, 1);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(__func__, "open nvs error: %s", esp_err_to_name(ret));
+        vTaskDelete(idle_disp_task_handle);
+        return ret;
+    }
+
+    joy_adjust_value_t joy_adjust_value = read_joy_adjust_offset();
+
+    ret = nvs_set_blob(nvs_handle, NVS_SYS_LEFT_X_OFFSET, &joy_adjust_value.left.x, sizeof(float));
+    ret = nvs_set_blob(nvs_handle, NVS_SYS_LEFT_Y_OFFSET, &joy_adjust_value.left.y, sizeof(float));
+    ret = nvs_set_blob(nvs_handle, NVS_SYS_RIGHT_X_OFFSET, &joy_adjust_value.right.x, sizeof(float));
+    ret = nvs_set_blob(nvs_handle, NVS_SYS_RIGHT_Y_OFFSET, &joy_adjust_value.right.y, sizeof(float));
+
+    nvs_commit(nvs_handle);
+    nvs_close(nvs_handle);
+    vTaskDelete(idle_disp_task_handle);
+    return ESP_OK;
+}
+
 esp_err_t check_devices(void *arg)
 {
     if (g_wifi_connected)
@@ -798,7 +833,6 @@ esp_err_t check_devices(void *arg)
                 check_menu[0].submenus = cJSON_GetObjectItem(root, "device_len")->valueint > 0 ? dev_list_menu : NULL;
                 check_menu[0].submenu_count = cJSON_GetObjectItem(root, "device_len")->valueint;
 
-
                 cJSON_Delete(root);
                 vTaskDelete(idle_disp_task_handle);
                 return ESP_OK;
@@ -824,12 +858,13 @@ disp_menu_t check_menu[] = {
 disp_menu_t settings_menu[] = {
     {"check_disp", "check display", main_menu, 2, check_menu, 1, check_devices, NULL},
     {"unbond_disp", "unbond display", main_menu, 2, NULL, 0, unbind_device, NULL},
+    {"joy_cor", "joy adjust", main_menu, 2, NULL, 0, joy_adjust, NULL},
     {"reset", "reset device", main_menu, 2, NULL, 0, reset_device, NULL},
 };
 
 disp_menu_t main_menu[] = {
     {"default_disp", "default display", NULL, 0, NULL, 0, NULL, NULL},
-    {"setting_disp", "setting display", NULL, 0, settings_menu, 3, NULL, NULL},
+    {"setting_disp", "setting display", NULL, 0, settings_menu, 4, NULL, NULL},
 };
 
 void draw_dashboard_screen()
@@ -961,10 +996,11 @@ void draw_menu_screen(const char *menu_name, disp_menu_t *menu, int len, int sel
 
 typedef struct
 {
-    int type; // 0: 摇杆, 1: 按键
+    int type; // 0: 摇杆, 1: 按键, 2: 摇杆值
     int id;   // 按键ID
     key_value_t key_val;
     joystick_vatual_button_t joy_val;
+    joystick_normalized_t nor_val;
 } input_event_t;
 
 QueueHandle_t input_queue;
@@ -1028,9 +1064,50 @@ void read_input_value_task()
     }
 }
 
+void read_joystick_value_task(void *arg)
+{
+    while (1)
+    {
+        input_event_t evt = {
+            .type = 2,
+            .nor_val = {
+                .y = joycon_value_L.y - joy_adjust_offset_value.left.y,
+                .x = joycon_value_R.x - joy_adjust_offset_value.right.x,
+            },
+        };
+
+        xQueueSend(input_queue, &evt, pdMS_TO_TICKS(50));
+
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+}
+
+void show_refresh_rate()
+{
+    static TickType_t last_tick = 0;
+    TickType_t now = xTaskGetTickCount();
+
+    if (last_tick != 0)
+    {
+        TickType_t dt_ticks = now - last_tick;
+        if (dt_ticks > 0)
+        {
+            uint32_t dt_ms = dt_ticks * portTICK_PERIOD_MS;
+            uint32_t fps = 1000U / dt_ms; // integer fps
+            ESP_LOGI(__func__, "fps = %" PRIu32, fps);
+        }
+        else
+        {
+            ESP_LOGI(__func__, "fps = inf (dt_ticks=0)");
+        }
+    }
+
+    last_tick = now;
+}
+
 void display_task(void *arg)
 {
-
+    lcd_spi_mutex = xSemaphoreCreateMutex();
     lcd_st7567_init();
 
     // 0: 仪表盘模式 1: 设置菜单模式
@@ -1041,6 +1118,7 @@ void display_task(void *arg)
 
     input_queue = xQueueCreate(5, sizeof(input_event_t));
     xTaskCreatePinnedToCore(read_input_value_task, "read_input_value_task", 1024 * 4, NULL, 4, NULL, 0);
+    xTaskCreatePinnedToCore(read_joystick_value_task, "read_joystick_value_task", 1024 * 4, NULL, 3, NULL, 0);
 
     input_event_t evt;
     while (1)
@@ -1053,25 +1131,6 @@ void display_task(void *arg)
                 {
                 case 0:
                 {
-                    if (strlen(g_dev_config.remote_mac) == 12)
-                    {
-                        cJSON *root = cJSON_CreateObject();
-                        cJSON_AddNumberToObject(root, "code", 101);
-                        cJSON *data = cJSON_CreateObject();
-                        cJSON_AddNumberToObject(data, "left", joycon_value_L.y);
-                        cJSON_AddNumberToObject(data, "right", joycon_value_R.x);
-                        cJSON_AddItemToObject(root, "data", data);
-                        char *publish = cJSON_PrintUnformatted(root);
-                        mqtt_message_t msg = {
-                            .data = publish,
-                            .dynamic = true,
-                        };
-                        if (xQueueSend(publish_queue, &msg, pdMS_TO_TICKS(50)) != pdTRUE)
-                        {
-                            user_free(__func__, publish);
-                        }
-                        cJSON_Delete(root);
-                    }
                 }
                 break;
                 case 1:
@@ -1081,20 +1140,24 @@ void display_task(void *arg)
                     {
                     case 0:
                     {
-                        remote_led_status = !remote_led_status;
-                        cJSON *root = cJSON_CreateObject();
-                        cJSON_AddNumberToObject(root, "code", 201);
-                        cJSON_AddBoolToObject(root, "data", remote_led_status);
-                        char *publish = cJSON_PrintUnformatted(root);
-                        mqtt_message_t msg = {
-                            .data = publish,
-                            .dynamic = true,
-                        };
-                        if (xQueueSend(publish_queue, &msg, pdMS_TO_TICKS(50)) != pdTRUE)
+                        if (g_bind_car_dev.is_bind)
                         {
-                            user_free(__func__, publish);
+                            remote_led_status = !remote_led_status;
+                            cJSON *root = cJSON_CreateObject();
+                            cJSON_AddNumberToObject(root, "code", 201);
+                            cJSON_AddBoolToObject(root, "data", remote_led_status);
+                            cJSON_AddStringToObject(root, "remote", g_bind_car_dev.car);
+                            char *publish = cJSON_PrintUnformatted(root);
+                            mqtt_message_t msg = {
+                                .data = publish,
+                                .dynamic = true,
+                            };
+                            if (xQueueSend(publish_queue, &msg, pdMS_TO_TICKS(50)) != pdTRUE)
+                            {
+                                user_free(__func__, publish);
+                            }
+                            cJSON_Delete(root);
                         }
-                        cJSON_Delete(root);
                     }
                     break;
                     case 1:
@@ -1114,6 +1177,30 @@ void display_task(void *arg)
                     }
                 }
                 break;
+                case 2:
+                {
+                    if (g_bind_car_dev.is_bind)
+                    {
+                        cJSON *root = cJSON_CreateObject();
+                        cJSON_AddNumberToObject(root, "code", 101);
+                        cJSON *data = cJSON_CreateObject();
+                        cJSON_AddNumberToObject(data, "left", evt.nor_val.y);
+                        cJSON_AddNumberToObject(data, "right", evt.nor_val.x);
+                        cJSON_AddItemToObject(root, "data", data);
+                        cJSON_AddStringToObject(root, "remote", g_bind_car_dev.car);
+                        char *publish = cJSON_PrintUnformatted(root);
+                        mqtt_message_t msg = {
+                            .data = publish,
+                            .dynamic = true,
+                        };
+                        if (xQueueSend(publish_queue, &msg, pdMS_TO_TICKS(50)) != pdTRUE)
+                        {
+                            ESP_LOGI(__func__, "nor data");
+                            user_free(__func__, publish);
+                        }
+                        cJSON_Delete(root);
+                    }
+                }
 
                 default:
                     break;
@@ -1223,5 +1310,7 @@ void display_task(void *arg)
         {
             draw_menu_screen(curr_menu->supmenus ? curr_menu->supmenus->desc : "MAIN MENU", curr_menu, curr_menu_len, cursor);
         }
+
+        // show_refresh_rate();
     }
 }

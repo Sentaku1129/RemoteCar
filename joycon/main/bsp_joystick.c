@@ -307,3 +307,24 @@ joystick_vatual_button_t read_right_joystick_postion()
 {
     return joystcik_right_vitual_button;
 }
+
+joy_adjust_value_t read_joy_adjust_offset()
+{
+    const int adjust_tick = 100;
+    joy_adjust_value_t joy_adjust_value = {0};
+    for(int i = 0; i < adjust_tick; i ++)
+    {
+        joy_adjust_value.left.x += joycon_value_L.x;
+        joy_adjust_value.left.y += joycon_value_L.y;
+
+        joy_adjust_value.right.x += joycon_value_R.x;
+        joy_adjust_value.right.y += joycon_value_R.y;
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
+    joy_adjust_value.left.x /= adjust_tick;
+    joy_adjust_value.left.y /= adjust_tick;
+
+    joy_adjust_value.right.x /= adjust_tick;
+    joy_adjust_value.right.y /= adjust_tick;
+    return joy_adjust_value;
+}
